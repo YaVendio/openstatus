@@ -264,6 +264,14 @@
           ]
         }
       },
+      "packages/tinybird": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__expect@^1.0.19",
+            "npm:@jsr/std__testing@^1.0.19"
+          ]
+        }
+      },
       "packages/tracker": {
         "packageJson": {
           "dependencies": [

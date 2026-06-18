@@ -49,7 +49,7 @@ type DBPageComponent = {
   pageId: number;
   name: string;
   description: string | null;
-  type: "static" | "monitor";
+  type: "static" | "monitor" | "external";
   monitorId: number | null;
   order: number | null;
   groupId: number | null;
@@ -159,7 +159,7 @@ export function protoThemeToDb(theme: PageTheme): "system" | "light" | "dark" {
  * Convert DB component type string to proto enum.
  */
 export function dbComponentTypeToProto(
-  type: "static" | "monitor",
+  type: "static" | "monitor" | "external",
 ): PageComponentType {
   switch (type) {
     case "monitor":
