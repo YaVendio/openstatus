@@ -114,7 +114,11 @@ describe("createSlackChannel", () => {
     );
     await channel.sendNotifications(
       [makeSub()],
-      makeUpdate({ updateId: 101, status: "monitoring", message: "second update" }),
+      makeUpdate({
+        updateId: 101,
+        status: "monitoring",
+        message: "second update",
+      }),
     );
 
     const posts = calls.filter((c) => c.method === "post");

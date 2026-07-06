@@ -119,7 +119,11 @@ export function buildRootMessage(
     // in the card's header block). See the root post/update calls in slack.ts.
     text: title,
     attachments: [
-      { color: COLORS[statusColor(pageUpdate.status)], fallback: title, blocks },
+      {
+        color: COLORS[statusColor(pageUpdate.status)],
+        fallback: title,
+        blocks,
+      },
     ],
   };
 }

@@ -197,7 +197,9 @@ export function createSlackChannel(deps: SlackChannelDeps) {
       );
       if (!backfillRes || backfillRes === TEAM_TOKEN_INVALID) {
         await deps.store.releaseDelivery(reportId, sub.id, updateId);
-        return backfillRes === TEAM_TOKEN_INVALID ? TEAM_TOKEN_INVALID : undefined;
+        return backfillRes === TEAM_TOKEN_INVALID
+          ? TEAM_TOKEN_INVALID
+          : undefined;
       }
       // Clear before posting the current reply: if that reply fails and the
       // delivery is retried, the first update must not be backfilled twice.
