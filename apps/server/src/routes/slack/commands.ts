@@ -19,10 +19,10 @@ const slashCommandSchema = z.object({
 });
 
 const HELP = [
-  "*OpenStatus*",
-  "• `/openstatus add <status-page-url>` — subscribe this channel to a status page",
-  "• `/openstatus remove <status-page-url>` — unsubscribe",
-  "• `/openstatus list` — show this channel's subscriptions",
+  "*openstatus*",
+  "• `/openstatus subscribe <status-page-url>` — subscribe this channel to a status page",
+  "• `/openstatus unsubscribe <status-page-url>` — unsubscribe",
+  "• `/openstatus subscriptions` — show this channel's subscriptions",
 ].join("\n");
 
 function ephemeral(c: Context, text: string) {
@@ -56,9 +56,9 @@ export async function handleSlackCommand(c: Context) {
   const sub = (tokens[0] ?? "help").toLowerCase();
   const arg = tokens[1];
 
-  if (sub === "add") {
+  if (sub === "subscribe") {
     if (!arg) {
-      return ephemeral(c, "Usage: `/openstatus add <status-page-url>`");
+      return ephemeral(c, "Usage: `/openstatus subscribe <status-page-url>`");
     }
     const page = await resolvePageFromUrl(arg);
     if (!page) {
@@ -91,12 +91,12 @@ export async function handleSlackCommand(c: Context) {
           `*${page.title}* isn't on a plan that supports subscribers.`,
         );
       }
-      console.error("slack /openstatus add failed:", error);
+      console.error("slack /openstatus subscribe failed:", error);
       return ephemeral(c, "Something went wrong subscribing this channel.");
     }
   }
 
-  if (sub === "remove") {
+  if (sub === "unsubscribe") {
     if (!arg) {
       const subs = await listSlackSubscribersForChannel({
         input: { teamId: team_id, channelId: channel_id },
@@ -120,7 +120,7 @@ export async function handleSlackCommand(c: Context) {
       const list = subs.map((s) => `• ${s.pageName}`).join("\n");
       return ephemeral(
         c,
-        `This channel is subscribed to several pages — specify which:\n${list}\n\nUsage: \`/openstatus remove <status-page-url>\``,
+        `This channel is subscribed to several pages — specify which:\n${list}\n\nUsage: \`/openstatus unsubscribe <status-page-url>\``,
       );
     }
     const page = await resolvePageFromUrl(arg);
@@ -138,7 +138,7 @@ export async function handleSlackCommand(c: Context) {
     );
   }
 
-  if (sub === "list") {
+  if (sub === "subscriptions") {
     const subs = await listSlackSubscribersForChannel({
       input: { teamId: team_id, channelId: channel_id },
     });
