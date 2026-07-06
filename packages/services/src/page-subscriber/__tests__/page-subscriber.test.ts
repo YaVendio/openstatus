@@ -290,26 +290,28 @@ describe("upsertSelfSignupSubscriber", () => {
   });
 
   test("rejects when the workspace plan disables status-subscribers", async () => {
-    const freePage = await db
-      .insert(page)
-      .values({
-        workspaceId: SEEDED_WORKSPACE_FREE_ID,
-        title: "plan-gate",
-        description: "plan-gate",
-        slug: `plan-gate-${Date.now()}`,
-        customDomain: "",
-      })
-      .returning()
-      .get();
-    try {
+    // Rolled-back tx so the free-workspace page never commits — a
+    // committed page would trip `page.test.ts`'s free-plan
+    // `status-pages` quota assertions under `deno test --parallel`.
+    await withTestTransaction(async (tx) => {
+      const freePage = await tx
+        .insert(page)
+        .values({
+          workspaceId: SEEDED_WORKSPACE_FREE_ID,
+          title: "plan-gate",
+          description: "plan-gate",
+          slug: `plan-gate-${Date.now()}`,
+          customDomain: "",
+        })
+        .returning()
+        .get();
       await expect(
         upsertSelfSignupSubscriber({
           input: { email: EMAILS.planGate, pageId: freePage.id },
+          db: tx,
         }),
       ).rejects.toThrow("Upgrade to use status subscribers");
-    } finally {
-      await db.delete(page).where(eq(page.id, freePage.id));
-    }
+    });
   });
 });
 
