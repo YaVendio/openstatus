@@ -37,9 +37,10 @@ const getBaseUrl = () => {
 
 // The whole tRPC surface is served from a single Node.js endpoint — there is
 // no longer an Edge/Node split, so all calls go to one link.
-export const endingLink = (opts?: {
-  headers?: HTTPHeaders | (() => HTTPHeaders | Promise<HTTPHeaders>);
-}): TRPCLink<AppRouter> =>
+export const endingLink =
+  (opts?: {
+    headers?: HTTPHeaders | (() => HTTPHeaders | Promise<HTTPHeaders>);
+  }): TRPCLink<AppRouter> =>
   (runtime) =>
     httpBatchLink({
       headers: opts?.headers, // REMINDER: fails when trying to `getTotalActiveMonitors()`
