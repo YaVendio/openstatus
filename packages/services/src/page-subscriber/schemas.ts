@@ -50,6 +50,7 @@ export type CreateSlackSubscriberInput = z.infer<
 
 export const RemoveSlackSubscriberInput = z.object({
   pageId: z.number().int().positive(),
+  teamId: z.string().min(1),
   channelId: z.string().min(1),
 });
 export type RemoveSlackSubscriberInput = z.infer<
@@ -57,6 +58,7 @@ export type RemoveSlackSubscriberInput = z.infer<
 >;
 
 export const ListSlackSubscribersInput = z.object({
+  teamId: z.string().min(1),
   channelId: z.string().min(1),
 });
 export type ListSlackSubscribersInput = z.infer<

@@ -99,7 +99,7 @@ export async function handleSlackCommand(c: Context) {
   if (sub === "remove") {
     if (!arg) {
       const subs = await listSlackSubscribersForChannel({
-        input: { channelId: channel_id },
+        input: { teamId: team_id, channelId: channel_id },
       });
       if (subs.length === 0) {
         return ephemeral(
@@ -109,7 +109,11 @@ export async function handleSlackCommand(c: Context) {
       }
       if (subs.length === 1) {
         await removeSlackSubscriber({
-          input: { pageId: subs[0].pageId, channelId: channel_id },
+          input: {
+            pageId: subs[0].pageId,
+            teamId: team_id,
+            channelId: channel_id,
+          },
         });
         return ephemeral(c, `Unsubscribed from *${subs[0].pageName}*.`);
       }
@@ -124,7 +128,7 @@ export async function handleSlackCommand(c: Context) {
       return ephemeral(c, `Couldn't find a status page at \`${arg}\`.`);
     }
     const { removed } = await removeSlackSubscriber({
-      input: { pageId: page.id, channelId: channel_id },
+      input: { pageId: page.id, teamId: team_id, channelId: channel_id },
     });
     return ephemeral(
       c,
@@ -136,7 +140,7 @@ export async function handleSlackCommand(c: Context) {
 
   if (sub === "list") {
     const subs = await listSlackSubscribersForChannel({
-      input: { channelId: channel_id },
+      input: { teamId: team_id, channelId: channel_id },
     });
     if (subs.length === 0) {
       return ephemeral(c, "This channel isn't subscribed to any status page.");

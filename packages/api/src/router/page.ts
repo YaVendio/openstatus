@@ -1,6 +1,7 @@
 import { Events } from "@openstatus/analytics";
 import { locales } from "@openstatus/locales";
 import { NotFoundError } from "@openstatus/services";
+import { getUptimeHistory } from "@openstatus/services/frozen-uptime";
 import {
   type CreatePageInput,
   // `CreatePageInput` re-exports the drizzle insert schema so routers
@@ -49,15 +50,41 @@ async function addDomainToVercel(domain: string) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
+    const code = error?.error?.code;
     console.error("Failed to add domain to Vercel:", { domain, error });
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message:
-        "Failed to add custom domain. Please try again. If it continues, contact support.",
-    });
+    throw toDomainError(domain, code);
   }
 
   return response.json();
+}
+
+// Vercel messages leak internal project details, so map known codes to our own copy.
+function toDomainError(domain: string, code?: string): TRPCError {
+  switch (code) {
+    case "domain_already_in_use":
+      return new TRPCError({
+        code: "CONFLICT",
+        message: `The domain '${domain}' is already in use by another status page. Remove it there first or contact support.`,
+      });
+    case "invalid_domain":
+    case "not_found":
+      return new TRPCError({
+        code: "BAD_REQUEST",
+        message: `The domain '${domain}' is invalid.`,
+      });
+    case "forbidden":
+    case "domain_taken":
+      return new TRPCError({
+        code: "FORBIDDEN",
+        message: `The domain '${domain}' belongs to another team on our hosting provider. Contact support if you own it.`,
+      });
+    default:
+      return new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message:
+          "Failed to add custom domain. Please try again. If it continues, contact support.",
+      });
+  }
 }
 
 async function removeDomainFromVercel(domain: string) {
@@ -153,6 +180,19 @@ export const pageRouter = createTRPCRouter({
       }
     }),
 
+  getUptimeHistory: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ ctx, input }) => {
+      try {
+        return await getUptimeHistory({
+          ctx: toServiceCtx(ctx),
+          input: { pageId: input.id },
+        });
+      } catch (err) {
+        toTRPCError(err);
+      }
+    }),
+
   // TODO: rename to create
   new: protectedProcedure
     .meta({ track: Events.CreatePage, trackProps: ["slug"] })
@@ -238,17 +278,14 @@ export const pageRouter = createTRPCRouter({
         });
         const newDomain = input.customDomain;
 
-        if (newDomain && !oldDomain) {
+        // unchanged saves must be a no-op — re-adding an existing domain fails on Vercel
+        if (newDomain === oldDomain) return;
+
+        if (newDomain) {
           await addDomainToVercel(newDomain);
-        } else if (oldDomain && newDomain && newDomain !== oldDomain) {
-          await addDomainToVercel(newDomain);
+        }
+        if (oldDomain) {
           await removeDomainFromVercel(oldDomain);
-        } else if (oldDomain && newDomain === "") {
-          await removeDomainFromVercel(oldDomain);
-        } else if (newDomain) {
-          await addDomainToVercel(newDomain);
-        } else {
-          return;
         }
 
         await updatePageCustomDomain({

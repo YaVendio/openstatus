@@ -93,7 +93,11 @@ describe("createSlackSubscriber", () => {
       },
     });
     await removeSlackSubscriber({
-      input: { pageId: PAGE_ID, channelId: CHANNELS.reactivate },
+      input: {
+        pageId: PAGE_ID,
+        teamId: TEAM_ID,
+        channelId: CHANNELS.reactivate,
+      },
     });
     const reactivated = await createSlackSubscriber({
       input: {
@@ -118,7 +122,7 @@ describe("removeSlackSubscriber", () => {
       input: { pageId: PAGE_ID, teamId: TEAM_ID, channelId: CHANNELS.remove },
     });
     const result = await removeSlackSubscriber({
-      input: { pageId: PAGE_ID, channelId: CHANNELS.remove },
+      input: { pageId: PAGE_ID, teamId: TEAM_ID, channelId: CHANNELS.remove },
     });
 
     expect(result.removed).toBe(true);
@@ -138,7 +142,7 @@ describe("removeSlackSubscriber", () => {
 
   test("returns removed=false when nothing is subscribed", async () => {
     const result = await removeSlackSubscriber({
-      input: { pageId: PAGE_ID, channelId: "C_SLACK_NEVER" },
+      input: { pageId: PAGE_ID, teamId: TEAM_ID, channelId: "C_SLACK_NEVER" },
     });
     expect(result.removed).toBe(false);
   });
@@ -150,16 +154,16 @@ describe("listSlackSubscribersForChannel", () => {
       input: { pageId: PAGE_ID, teamId: TEAM_ID, channelId: CHANNELS.list },
     });
     const subs = await listSlackSubscribersForChannel({
-      input: { channelId: CHANNELS.list },
+      input: { teamId: TEAM_ID, channelId: CHANNELS.list },
     });
     expect(subs).toHaveLength(1);
     expect(subs[0]?.pageId).toBe(PAGE_ID);
 
     await removeSlackSubscriber({
-      input: { pageId: PAGE_ID, channelId: CHANNELS.list },
+      input: { pageId: PAGE_ID, teamId: TEAM_ID, channelId: CHANNELS.list },
     });
     const after = await listSlackSubscribersForChannel({
-      input: { channelId: CHANNELS.list },
+      input: { teamId: TEAM_ID, channelId: CHANNELS.list },
     });
     expect(after).toHaveLength(0);
   });

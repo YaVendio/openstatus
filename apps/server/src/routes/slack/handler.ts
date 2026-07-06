@@ -6,11 +6,23 @@ import type { Context } from "hono";
 import { z } from "zod";
 
 import { runAgent } from "./agent";
-import { buildConfirmationBlocks, getConfirmationText } from "./blocks";
+import {
+  buildConfirmationBlocks,
+  getConfirmationText,
+  type RefResolvers,
+} from "./blocks";
 import { findByThread, replace, store } from "./confirmation-store";
 import type { PendingPayload } from "./confirmation-store";
+import { getComponentNames, getPageDashboardLink } from "./page-urls";
 import { getRegistryTool, isSlackToolDraft } from "./registry-runner";
 import { resolveWorkspace } from "./workspace-resolver";
+
+function makeRefResolvers(workspaceId: number): RefResolvers {
+  return {
+    page: (pageId) => getPageDashboardLink(workspaceId, pageId),
+    componentNames: (ids) => getComponentNames(workspaceId, ids),
+  };
+}
 
 const logger = getLogger("api-server");
 
@@ -352,10 +364,11 @@ async function handleConfirmation(
   if (existing) {
     await replace(existing.id, payload);
 
-    const blocks = buildConfirmationBlocks({
+    const blocks = await buildConfirmationBlocks({
       actionId: existing.id,
       tool,
       input: draft.displayInput,
+      resolvers: makeRefResolvers(workspaceId),
     });
     await slack.chat.update({ channel, ts: thinkingTs, text, blocks });
     await slack.chat.update({
@@ -375,10 +388,11 @@ async function handleConfirmation(
       payload,
     });
 
-    const blocks = buildConfirmationBlocks({
+    const blocks = await buildConfirmationBlocks({
       actionId,
       tool,
       input: draft.displayInput,
+      resolvers: makeRefResolvers(workspaceId),
     });
     await slack.chat.update({ channel, ts: thinkingTs, text, blocks });
   }

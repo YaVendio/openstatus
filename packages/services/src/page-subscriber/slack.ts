@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "@openstatus/db";
+import { and, eq, isNull, sql } from "@openstatus/db";
 import {
   page,
   pageSubscriber,
@@ -186,6 +186,7 @@ export async function removeSlackSubscriber(args: {
         eq(pageSubscriber.pageId, input.pageId),
         eq(pageSubscriber.slackChannelId, input.channelId),
         eq(pageSubscriber.channelType, "slack"),
+        sql`json_extract(${pageSubscriber.channelConfig}, '$.teamId') = ${input.teamId}`,
         isNull(pageSubscriber.unsubscribedAt),
       ),
     });
@@ -238,6 +239,7 @@ export async function listSlackSubscribersForChannel(args: {
     where: and(
       eq(pageSubscriber.slackChannelId, input.channelId),
       eq(pageSubscriber.channelType, "slack"),
+      sql`json_extract(${pageSubscriber.channelConfig}, '$.teamId') = ${input.teamId}`,
       isNull(pageSubscriber.unsubscribedAt),
     ),
     with: { page: true },
