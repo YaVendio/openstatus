@@ -1,4 +1,4 @@
-import { and, db, eq } from "@openstatus/db";
+import { and, db, desc, eq } from "@openstatus/db";
 import { integration, pageSubscriber } from "@openstatus/db/src/schema";
 import type {
   ChatPostMessageArguments,
@@ -77,6 +77,10 @@ async function getBotTokenFromDb(teamId: string): Promise<string | null> {
         eq(integration.externalId, teamId),
       ),
     )
+    // Slack keeps one live token per (app, team); a reinstall invalidates all
+    // earlier ones. If the team is linked to several workspaces, the newest row
+    // is the only one holding a valid token.
+    .orderBy(desc(integration.updatedAt))
     .get();
   const credential = row?.credential as { botToken?: string } | null;
   return credential?.botToken ?? null;
