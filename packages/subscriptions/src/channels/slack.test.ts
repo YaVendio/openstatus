@@ -199,6 +199,31 @@ describe("createSlackChannel", () => {
     expect(unsubscribed).toEqual([7]);
   });
 
+  test("token error leaves subscribers intact and aborts the team batch", async () => {
+    const { client, calls } = makeClient({ failPostWith: "invalid_auth" });
+    const unsubscribed: number[] = [];
+    const channel = createSlackChannel({
+      store: createMemoryAnchorStore(),
+      createClient: () => client,
+      getBotToken: token,
+      softUnsubscribe: async (id) => {
+        unsubscribed.push(id);
+      },
+    });
+
+    await channel.sendNotifications(
+      [
+        makeSub({ id: 1, slackChannelId: "C1" }),
+        makeSub({ id: 2, slackChannelId: "C2" }),
+      ],
+      makeUpdate(),
+    );
+
+    // No subscriber unsubscribed, and the second member is never attempted.
+    expect(unsubscribed).toEqual([]);
+    expect(calls.filter((c) => c.method === "post").length).toBe(1);
+  });
+
   test("maintenance posts once with no thread and no anchor", async () => {
     const { client, calls } = makeClient();
     const store = createMemoryAnchorStore();

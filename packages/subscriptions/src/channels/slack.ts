@@ -26,18 +26,29 @@ export interface SlackChannelDeps {
   softUnsubscribe: (subscriberId: number) => Promise<void>;
 }
 
-// Errors that can never succeed on retry — the channel/app is gone, so we
-// stop delivering to that subscriber instead of failing on every update.
-const TERMINAL_SLACK_ERRORS = new Set([
+// Channel-scoped terminal errors: this subscriber's destination is gone for
+// good, so we stop delivering to that one subscriber.
+const CHANNEL_TERMINAL_ERRORS = new Set([
   "channel_not_found",
   "is_archived",
   "channel_is_archived",
+]);
+
+// Token-scoped errors: the team's bot token is invalid. This affects every
+// subscriber on the team and is recoverable by reinstalling the app, so we
+// abort the team's batch WITHOUT unsubscribing anyone — otherwise a broken
+// token silently and permanently drops every subscription on the team.
+const TOKEN_TERMINAL_ERRORS = new Set([
+  "invalid_auth",
   "account_inactive",
   "token_revoked",
-  "not_in_channel",
   "not_authed",
-  "invalid_auth",
 ]);
+
+// Returned by a delivery when the team token is invalid, signalling the caller
+// to abort the remaining members of that team.
+const TEAM_TOKEN_INVALID = Symbol("slack_team_token_invalid");
+type DeliveryOutcome = typeof TEAM_TOKEN_INVALID | undefined;
 
 // WebClient throws `WebAPIPlatformError` carrying `data.error`; this is the
 // only place we reach into that SDK error shape.
@@ -83,13 +94,16 @@ export function createSlackChannel(deps: SlackChannelDeps) {
   async function runSlack(
     subscriberId: number,
     fn: () => Promise<SlackPostResult>,
-  ): Promise<SlackPostResult | null> {
+  ): Promise<SlackPostResult | null | typeof TEAM_TOKEN_INVALID> {
     try {
       return await fn();
     } catch (error) {
       if (error instanceof Error) {
         const code = slackErrorCode(error);
-        if (code && TERMINAL_SLACK_ERRORS.has(code)) {
+        if (code && TOKEN_TERMINAL_ERRORS.has(code)) {
+          return TEAM_TOKEN_INVALID;
+        }
+        if (code && CHANNEL_TERMINAL_ERRORS.has(code)) {
           await deps.softUnsubscribe(subscriberId);
           console.error(
             `slack: terminal error '${code}' for subscriber ${subscriberId} — unsubscribed`,
@@ -111,15 +125,16 @@ export function createSlackChannel(deps: SlackChannelDeps) {
     sub: Subscription,
     channelId: string,
     pageUpdate: PageUpdate,
-  ): Promise<void> {
+  ): Promise<DeliveryOutcome> {
     const root = buildRootMessage(pageUpdate, sub);
-    await runSlack(sub.id, () =>
+    const res = await runSlack(sub.id, () =>
       client.postMessage({
         channel: channelId,
         text: root.text,
         attachments: root.attachments,
       }),
     );
+    if (res === TEAM_TOKEN_INVALID) return TEAM_TOKEN_INVALID;
   }
 
   async function deliverReport(
@@ -127,7 +142,7 @@ export function createSlackChannel(deps: SlackChannelDeps) {
     sub: Subscription,
     channelId: string,
     pageUpdate: PageUpdate,
-  ): Promise<void> {
+  ): Promise<DeliveryOutcome> {
     const reportId = pageUpdate.id;
     const updateId = pageUpdate.updateId;
     if (updateId == null) {
@@ -150,9 +165,9 @@ export function createSlackChannel(deps: SlackChannelDeps) {
           attachments: root.attachments,
         }),
       );
-      if (!res) {
+      if (!res || res === TEAM_TOKEN_INVALID) {
         await deps.store.releaseDelivery(reportId, sub.id, updateId);
-        return;
+        return res === TEAM_TOKEN_INVALID ? TEAM_TOKEN_INVALID : undefined;
       }
       if (res.ts) {
         await deps.store.setAnchor(reportId, sub.id, { ts: res.ts, channelId });
@@ -169,13 +184,13 @@ export function createSlackChannel(deps: SlackChannelDeps) {
         blocks: reply.blocks,
       }),
     );
-    if (!replyRes) {
+    if (!replyRes || replyRes === TEAM_TOKEN_INVALID) {
       await deps.store.releaseDelivery(reportId, sub.id, updateId);
-      return;
+      return replyRes === TEAM_TOKEN_INVALID ? TEAM_TOKEN_INVALID : undefined;
     }
 
     // Re-render the root so its emoji/status track the latest state.
-    await runSlack(sub.id, () =>
+    const updateRes = await runSlack(sub.id, () =>
       client.update({
         channel: anchor.channelId,
         ts: anchor.ts,
@@ -183,6 +198,7 @@ export function createSlackChannel(deps: SlackChannelDeps) {
         attachments: root.attachments,
       }),
     );
+    if (updateRes === TEAM_TOKEN_INVALID) return TEAM_TOKEN_INVALID;
   }
 
   async function sendNotifications(
@@ -214,13 +230,20 @@ export function createSlackChannel(deps: SlackChannelDeps) {
           return;
         }
         const client = deps.createClient(token);
-        await Promise.allSettled(
-          members.map(({ sub, channelId }) =>
+        // Sequential per team so a token failure aborts the batch before
+        // hammering Slack with N calls that will all fail identically.
+        for (const { sub, channelId } of members) {
+          const outcome =
             pageUpdate.status === "maintenance"
-              ? deliverMaintenance(client, sub, channelId, pageUpdate)
-              : deliverReport(client, sub, channelId, pageUpdate),
-          ),
-        );
+              ? await deliverMaintenance(client, sub, channelId, pageUpdate)
+              : await deliverReport(client, sub, channelId, pageUpdate);
+          if (outcome === TEAM_TOKEN_INVALID) {
+            console.error(
+              `slack: team ${teamId} bot token invalid — aborting ${members.length} deliveries; subscribers left intact (reconnect the Slack app)`,
+            );
+            break;
+          }
+        }
       }),
     );
   }
