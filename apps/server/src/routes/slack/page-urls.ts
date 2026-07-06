@@ -31,16 +31,20 @@ function getDashboardBaseUrl(): string {
 
 /**
  * Resolve a page id to its dashboard link — the page title plus the internal
- * dashboard URL (not the public status page). Returns null when the page no
- * longer exists so callers can fall back to the raw id.
+ * dashboard URL (not the public status page). Scoped to the workspace so a
+ * spoofed id from another workspace never leaks its title into the preview
+ * card (pageId on the draft is only validated against the workspace at execute
+ * time). Returns null when the page doesn't exist in the workspace so callers
+ * can fall back to the raw id.
  */
 export async function getPageDashboardLink(
+  workspaceId: number,
   pageId: number,
 ): Promise<{ title: string; url: string } | null> {
   const statusPage = await db
     .select({ title: page.title })
     .from(page)
-    .where(eq(page.id, pageId))
+    .where(and(eq(page.workspaceId, workspaceId), eq(page.id, pageId)))
     .get();
 
   if (!statusPage) return null;

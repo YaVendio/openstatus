@@ -19,7 +19,7 @@ import { resolveWorkspace } from "./workspace-resolver";
 
 function makeRefResolvers(workspaceId: number): RefResolvers {
   return {
-    page: (pageId) => getPageDashboardLink(pageId),
+    page: (pageId) => getPageDashboardLink(workspaceId, pageId),
     componentNames: (ids) => getComponentNames(workspaceId, ids),
   };
 }

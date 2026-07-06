@@ -122,33 +122,38 @@ async function renderLine(
 ): Promise<string> {
   const ref = line.ref;
   if (ref && resolvers) {
-    switch (ref.kind) {
-      case "page": {
-        const link = await resolvers.page(ref.pageId);
-        if (link) {
-          return `*Page:* <${link.url}|${escapeLinkText(link.title)}>`;
+    try {
+      switch (ref.kind) {
+        case "page": {
+          const link = await resolvers.page(ref.pageId);
+          if (link) {
+            return `*Page:* <${link.url}|${escapeLinkText(link.title)}>`;
+          }
+          break;
         }
-        break;
+        case "components": {
+          const names = await resolvers.componentNames(ref.componentIds);
+          const value = ref.componentIds
+            .map((id) => nameOrId(names, id))
+            .join(", ");
+          return `*${line.label}:* ${value}`;
+        }
+        case "componentImpacts": {
+          const names = await resolvers.componentNames(
+            ref.impacts.map((i) => i.pageComponentId),
+          );
+          const value = ref.impacts
+            .map((i) => `${nameOrId(names, i.pageComponentId)} → ${i.impact}`)
+            .join(", ");
+          return `*${line.label}:* ${value}`;
+        }
       }
-      case "components": {
-        const names = await resolvers.componentNames(ref.componentIds);
-        const value = ref.componentIds
-          .map((id) => nameOrId(names, id))
-          .join(", ");
-        return `*${line.label}:* ${value}`;
-      }
-      case "componentImpacts": {
-        const names = await resolvers.componentNames(
-          ref.impacts.map((i) => i.pageComponentId),
-        );
-        const value = ref.impacts
-          .map((i) => `${nameOrId(names, i.pageComponentId)} → ${i.impact}`)
-          .join(", ");
-        return `*${line.label}:* ${value}`;
-      }
+    } catch {
+      // A transient name/link lookup failure degrades just this line to its
+      // raw id value below, rather than aborting the whole confirmation card.
     }
   }
-  return `*${line.label}:* ${line.value}`;
+  return `*${line.label}:* ${escapeText(line.value)}`;
 }
 
 function nameOrId(names: Map<number, string>, id: number): string {
@@ -212,7 +217,10 @@ export async function buildConfirmationBlocks(args: {
   return [
     {
       type: "section",
-      text: { type: "mrkdwn", text: `*${summary.title}*\n\n${lines}` },
+      text: {
+        type: "mrkdwn",
+        text: `*${escapeText(summary.title)}*\n\n${lines}`,
+      },
     },
     { type: "divider" },
     { type: "actions", elements: buttons },
@@ -224,5 +232,7 @@ export function getConfirmationText(args: {
   input: unknown;
 }): string {
   if (!args.tool.approval) return `Confirm ${args.tool.name}`;
-  return args.tool.approval.summarize(args.input).title;
+  // Rendered as the message `text` field, which Slack parses as mrkdwn — escape
+  // so an LLM/user-controlled title can't inject a link or other markup.
+  return escapeText(args.tool.approval.summarize(args.input).title);
 }

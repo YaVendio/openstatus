@@ -138,6 +138,59 @@ describe("buildConfirmationBlocks", () => {
     expect(text).toContain("*Components:* Svc 101, 999");
   });
 
+  test("degrades to raw page id (card intact) when the page resolver rejects", async () => {
+    const tool = agentTools.create_status_report;
+    const blocks = await buildConfirmationBlocks({
+      actionId: "rej1",
+      tool,
+      input: {
+        title: "Outage",
+        status: "investigating",
+        message: "msg",
+        pageId: 2705,
+        pageComponentIds: [],
+      },
+      resolvers: {
+        ...stubResolvers,
+        page: () => Promise.reject(new Error("db down")),
+      },
+    });
+    const text = (
+      blocks.find((b) => b.type === "section") as { text: { text: string } }
+    ).text.text;
+    expect(text).toContain("*Page ID:* 2705");
+    // The rest of the card must still build — a flaky lookup degrades one line.
+    const actions = blocks.find((b) => b.type === "actions") as {
+      elements: unknown[];
+    };
+    expect(actions.elements).toHaveLength(3);
+  });
+
+  test("degrades to raw component ids when the component resolver rejects", async () => {
+    const tool = agentTools.create_status_report;
+    const blocks = await buildConfirmationBlocks({
+      actionId: "rej2",
+      tool,
+      input: {
+        title: "Outage",
+        status: "investigating",
+        message: "msg",
+        pageId: 1,
+        pageComponentIds: [101, 102],
+        componentImpacts: [{ pageComponentId: 101, impact: "major_outage" }],
+      },
+      resolvers: {
+        ...stubResolvers,
+        componentNames: () => Promise.reject(new Error("db down")),
+      },
+    });
+    const text = (
+      blocks.find((b) => b.type === "section") as { text: { text: string } }
+    ).text.text;
+    expect(text).toContain("*Components:* 101, 102");
+    expect(text).toContain("*Impacts:* 101 → major_outage");
+  });
+
   test("escapes mrkdwn-significant chars in the page link text", async () => {
     const tool = agentTools.create_status_report;
     const blocks = await buildConfirmationBlocks({
@@ -183,6 +236,29 @@ describe("buildConfirmationBlocks", () => {
       blocks.find((b) => b.type === "section") as { text: { text: string } }
     ).text.text;
     expect(text).toContain("*Components:* API &amp; &lt;Web&gt;");
+  });
+
+  test("escapes mrkdwn in the title header and un-refed line values", async () => {
+    const tool = agentTools.create_status_report;
+    const evil = "<http://evil.example|Click here>";
+    const blocks = await buildConfirmationBlocks({
+      actionId: "esc3",
+      tool,
+      input: {
+        title: evil,
+        status: "investigating",
+        message: "msg",
+        pageId: 1,
+        pageComponentIds: [],
+      },
+      resolvers: stubResolvers,
+    });
+    const text = (
+      blocks.find((b) => b.type === "section") as { text: { text: string } }
+    ).text.text;
+    // Header ("Create Status Report: <evil>") and the "Title" line both escape.
+    expect(text).not.toContain(evil);
+    expect(text).toContain("&lt;http://evil.example|Click here&gt;");
   });
 
   test("add_status_report_update resolves impact component names", async () => {
@@ -501,6 +577,21 @@ describe("getConfirmationText", () => {
         input: { statusReportId: 1, message: "fixed" },
       }),
     ).toBe("Resolve Status Report");
+  });
+
+  test("escapes mrkdwn in the title (message text field)", () => {
+    expect(
+      getConfirmationText({
+        tool: agentTools.create_status_report,
+        input: {
+          title: "<http://evil.example|Click here>",
+          status: "investigating",
+          message: "m",
+          pageId: 1,
+          pageComponentIds: [],
+        },
+      }),
+    ).toBe("Create Status Report: &lt;http://evil.example|Click here&gt;");
   });
 });
 

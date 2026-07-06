@@ -10,6 +10,7 @@ export const getReportUrl = (
   Promise.resolve(`https://example.openstatus.dev/events/report/${reportId}`);
 
 export const getPageDashboardLink = (
+  _workspaceId: number,
   pageId: number,
 ): Promise<{ title: string; url: string } | null> =>
   Promise.resolve({
