@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { expect } from "@std/expect";
+import { describe, it as test } from "@std/testing/bdd";
 
 import type { PageUpdate, Subscription } from "../types";
 import { buildReplyMessage, buildRootMessage } from "./slack-blocks";

@@ -46,7 +46,7 @@ describe("getWorkspaceWithUsage", () => {
       expect(result.id).toBe(SEEDED_WORKSPACE_TEAM_ID);
 
       // Iterate the usage object *before* any `toMatchObject` call —
-      // bun:test's `toMatchObject` implementation mutates the received
+      // the `toMatchObject` implementation mutates the received
       // object in place, replacing number fields with the
       // `expect.any(Number)` asymmetric-matcher stub on the expected
       // side. Subsequent reads of `result.usage.<key>` then return the

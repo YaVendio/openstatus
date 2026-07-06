@@ -1,7 +1,7 @@
 import type { Interceptor } from "@connectrpc/connect";
 import { Events } from "@openstatus/analytics";
 // @ts-nocheck — ConnectRPC's deep generic types (AnyFn, UnaryResponse, etc.)
-// are incompatible with bun:test mocks. All runtime behavior is correct.
+// are incompatible with the test mocks. All runtime behavior is correct.
 import {
   beforeEach,
   describe,
