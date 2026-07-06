@@ -26,8 +26,6 @@ import { toAiSdkTools } from "@/lib/agent-tools/adapter";
 import { getChatServiceContext } from "@/lib/agent-tools/context";
 import { chatRateLimit } from "@/lib/rate-limit/chat";
 
-export const runtime = "edge";
-
 // Drop tool parts that have no result the SDK can turn into a tool_result
 // block. `ignoreIncompleteToolCalls` doesn't cover `approval-requested`, so
 // a mid-confirmation reload would otherwise replay an orphan `tool_use` to

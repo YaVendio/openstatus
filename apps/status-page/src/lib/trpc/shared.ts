@@ -48,37 +48,17 @@ const getBaseUrl = () => {
   return "http://localhost:3000"; // Local dev and Docker (internal calls)
 };
 
-const lambdas = ["stripeRouter", "emailRouter"];
-
+// The whole tRPC surface is served from a single Node.js endpoint — there is
+// no longer an Edge/Node split, so all calls go to one link.
 export const endingLink = (opts?: {
   fetch?: typeof fetch;
   headers?: HTTPHeaders | (() => HTTPHeaders | Promise<HTTPHeaders>);
-}) =>
-  ((runtime) => {
-    const sharedOpts = {
+}): TRPCLink<AppRouter> =>
+  (runtime) =>
+    httpBatchLink({
       headers: opts?.headers,
       fetch: opts?.fetch,
       transformer: superjson,
-      // oxlint-disable-next-line typescript/no-explicit-any -- FIXME: remove any
-    } satisfies Partial<HTTPBatchLinkOptions<any>>;
-
-    const edgeLink = httpBatchLink({
-      ...sharedOpts,
-      url: `${getBaseUrl()}/api/trpc/edge`,
-    })(runtime);
-    const lambdaLink = httpBatchLink({
-      ...sharedOpts,
       url: `${getBaseUrl()}/api/trpc/lambda`,
-    })(runtime);
-
-    return (ctx) => {
-      const path = ctx.op.path.split(".") as [string, ...string[]];
-      const endpoint = lambdas.includes(path[0]) ? "lambda" : "edge";
-
-      const newCtx = {
-        ...ctx,
-        op: { ...ctx.op, path: path.join(".") },
-      };
-      return endpoint === "edge" ? edgeLink(newCtx) : lambdaLink(newCtx);
-    };
-  }) satisfies TRPCLink<AppRouter>;
+      // oxlint-disable-next-line typescript/no-explicit-any -- FIXME: remove any
+    } satisfies Partial<HTTPBatchLinkOptions<any>>)(runtime);

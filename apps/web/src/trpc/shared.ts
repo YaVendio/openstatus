@@ -39,12 +39,11 @@ const getBaseUrl = () => {
 // no longer an Edge/Node split, so all calls go to one link.
 export const endingLink = (opts?: {
   headers?: HTTPHeaders | (() => HTTPHeaders | Promise<HTTPHeaders>);
-}) =>
-  ((runtime) => {
-    return httpBatchLink({
+}): TRPCLink<AppRouter> =>
+  (runtime) =>
+    httpBatchLink({
       headers: opts?.headers, // REMINDER: fails when trying to `getTotalActiveMonitors()`
       transformer: superjson,
       url: `${getBaseUrl()}/api/trpc/lambda`,
       // oxlint-disable-next-line typescript/no-explicit-any -- FIXME: remove any
     } satisfies Partial<HTTPBatchLinkOptions<any>>)(runtime);
-  }) satisfies TRPCLink<AppRouter>;
