@@ -150,6 +150,39 @@ describe("handleSlackEvent", () => {
     expect(slackTestState.calls.length).toBe(0);
   });
 
+  test("responds once when a mention arrives as app_mention and message", async () => {
+    const ts = `${Date.now()}.55`;
+    const base = {
+      type: "event_callback",
+      team_id: "T_KNOWN",
+      event: {
+        text: "<@UBOT> create an incident",
+        user: "U1",
+        channel: "C1",
+        channel_type: "channel",
+        ts,
+      },
+    };
+
+    // Same underlying message, delivered as two distinct events.
+    await signAndPost(app, {
+      ...base,
+      event_id: `evt_mention_${ts}`,
+      event: { ...base.event, type: "app_mention" },
+    });
+    await signAndPost(app, {
+      ...base,
+      event_id: `evt_message_${ts}`,
+      event: { ...base.event, type: "message" },
+    });
+    await new Promise((r) => setTimeout(r, 100));
+
+    const thinking = slackTestState.calls.filter(
+      (m) => m.method === "postMessage",
+    );
+    expect(thinking.length).toBe(1);
+  });
+
   test("handles app_uninstalled event", async () => {
     const res = await signAndPost(app, {
       type: "event_callback",

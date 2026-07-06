@@ -170,6 +170,12 @@ async function processEvent(body: SlackEvent) {
   const teamId = body.team_id;
   if (!teamId || !event.channel || !event.ts) return;
 
+  // A single mention arrives as BOTH an `app_mention` and a `message.*` event
+  // (distinct event_ids, same message ts), so the event_id dedup above doesn't
+  // catch the pair. Dedup on the message identity so we only respond once.
+  // Runs before the first `await` so concurrent deliveries can't both pass.
+  if (dedup(`msg:${event.channel}:${event.ts}`)) return;
+
   const resolved = await resolveWorkspace(teamId);
   if (!resolved) {
     logger.warn("slack integration not found", { teamId });
