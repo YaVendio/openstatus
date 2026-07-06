@@ -138,6 +138,126 @@ describe("buildConfirmationBlocks", () => {
     expect(text).toContain("*Components:* Svc 101, 999");
   });
 
+  test("escapes mrkdwn-significant chars in the page link text", async () => {
+    const tool = agentTools.create_status_report;
+    const blocks = await buildConfirmationBlocks({
+      actionId: "esc1",
+      tool,
+      input: {
+        title: "Outage",
+        status: "investigating",
+        message: "msg",
+        pageId: 1,
+        pageComponentIds: [],
+      },
+      resolvers: {
+        ...stubResolvers,
+        page: () =>
+          Promise.resolve({ title: "A & B <c> |d", url: "https://x/1" }),
+      },
+    });
+    const text = (
+      blocks.find((b) => b.type === "section") as { text: { text: string } }
+    ).text.text;
+    expect(text).toContain("<https://x/1|A &amp; B &lt;c&gt; ❘d>");
+  });
+
+  test("escapes mrkdwn-significant chars in component names", async () => {
+    const tool = agentTools.create_status_report;
+    const blocks = await buildConfirmationBlocks({
+      actionId: "esc2",
+      tool,
+      input: {
+        title: "Outage",
+        status: "investigating",
+        message: "msg",
+        pageId: 1,
+        pageComponentIds: [101],
+      },
+      resolvers: {
+        ...stubResolvers,
+        componentNames: () => Promise.resolve(new Map([[101, "API & <Web>"]])),
+      },
+    });
+    const text = (
+      blocks.find((b) => b.type === "section") as { text: { text: string } }
+    ).text.text;
+    expect(text).toContain("*Components:* API &amp; &lt;Web&gt;");
+  });
+
+  test("add_status_report_update resolves impact component names", async () => {
+    const tool = agentTools.add_status_report_update;
+    const blocks = await buildConfirmationBlocks({
+      actionId: "au1",
+      tool,
+      input: {
+        statusReportId: 42,
+        status: "monitoring",
+        message: "recovering",
+        componentImpacts: [{ pageComponentId: 7, impact: "partial_outage" }],
+      },
+      resolvers: stubResolvers,
+    });
+    const text = (
+      blocks.find((b) => b.type === "section") as { text: { text: string } }
+    ).text.text;
+    expect(text).toContain("*Impacts:* Svc 7 → partial_outage");
+    expect(text).not.toContain("*Impacts:* 7 →");
+  });
+
+  test("update_status_report resolves component names", async () => {
+    const tool = agentTools.update_status_report;
+    const blocks = await buildConfirmationBlocks({
+      actionId: "up1",
+      tool,
+      input: { statusReportId: 10, pageComponentIds: [1, 2] },
+      resolvers: stubResolvers,
+    });
+    const text = (
+      blocks.find((b) => b.type === "section") as { text: { text: string } }
+    ).text.text;
+    expect(text).toContain("*Components:* Svc 1, Svc 2");
+  });
+
+  test("update_status_report keeps '(clear all)' literal even with resolvers", async () => {
+    const tool = agentTools.update_status_report;
+    const blocks = await buildConfirmationBlocks({
+      actionId: "up2",
+      tool,
+      input: { statusReportId: 10, pageComponentIds: [] },
+      resolvers: stubResolvers,
+    });
+    const text = (
+      blocks.find((b) => b.type === "section") as { text: { text: string } }
+    ).text.text;
+    expect(text).toContain("*Components:* (clear all)");
+  });
+
+  test("create_maintenance resolves the page link and component names", async () => {
+    const tool = agentTools.create_maintenance;
+    const blocks = await buildConfirmationBlocks({
+      actionId: "mn1",
+      tool,
+      input: {
+        title: "DB Upgrade",
+        message: "Restarting replicas",
+        from: "2026-06-01T00:00:00Z",
+        to: "2026-06-01T01:00:00Z",
+        pageId: 7,
+        pageComponentIds: [1, 2],
+      },
+      resolvers: stubResolvers,
+    });
+    const text = (
+      blocks.find((b) => b.type === "section") as { text: { text: string } }
+    ).text.text;
+    expect(text).toContain(
+      "*Page:* <https://app.openstatus.dev/status-pages/7|Acme Status>",
+    );
+    expect(text).toContain("*Components:* Svc 1, Svc 2");
+    expect(text).not.toContain("Page ID");
+  });
+
   test("create_status_report shows components when provided", async () => {
     const tool = agentTools.create_status_report;
     const blocks = await buildConfirmationBlocks({
