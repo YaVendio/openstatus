@@ -6,12 +6,13 @@ import {
   buildConfirmationBlocks,
   getConfirmationText,
   parseActionId,
+  type RefResolvers,
 } from "./blocks";
 
 describe("buildConfirmationBlocks", () => {
-  test("create_status_report has approve / approve_flag / cancel", () => {
+  test("create_status_report has approve / approve_flag / cancel", async () => {
     const tool = agentTools.create_status_report;
-    const blocks = buildConfirmationBlocks({
+    const blocks = await buildConfirmationBlocks({
       actionId: "abc123",
       tool,
       input: {
@@ -39,9 +40,107 @@ describe("buildConfirmationBlocks", () => {
     expect(actions.elements[2].action_id).toBe("cancel_abc123");
   });
 
-  test("create_status_report shows components when provided", () => {
+  const stubResolvers: RefResolvers = {
+    page: (pageId) =>
+      Promise.resolve({
+        title: "Acme Status",
+        url: `https://app.openstatus.dev/status-pages/${pageId}`,
+      }),
+    componentNames: (ids) =>
+      Promise.resolve(new Map(ids.map((id) => [id, `Svc ${id}`]))),
+  };
+
+  test("create_status_report links the page name when resolvers resolve", async () => {
     const tool = agentTools.create_status_report;
-    const blocks = buildConfirmationBlocks({
+    const blocks = await buildConfirmationBlocks({
+      actionId: "link1",
+      tool,
+      input: {
+        title: "Outage",
+        status: "investigating",
+        message: "msg",
+        pageId: 2705,
+        pageComponentIds: [],
+      },
+      resolvers: stubResolvers,
+    });
+    const text = (
+      blocks.find((b) => b.type === "section") as { text: { text: string } }
+    ).text.text;
+    expect(text).toContain(
+      "*Page:* <https://app.openstatus.dev/status-pages/2705|Acme Status>",
+    );
+    expect(text).not.toContain("Page ID");
+  });
+
+  test("create_status_report falls back to page id when the page can't be resolved", async () => {
+    const tool = agentTools.create_status_report;
+    const blocks = await buildConfirmationBlocks({
+      actionId: "link2",
+      tool,
+      input: {
+        title: "Outage",
+        status: "investigating",
+        message: "msg",
+        pageId: 2705,
+        pageComponentIds: [],
+      },
+      resolvers: { ...stubResolvers, page: () => Promise.resolve(null) },
+    });
+    const text = (
+      blocks.find((b) => b.type === "section") as { text: { text: string } }
+    ).text.text;
+    expect(text).toContain("*Page ID:* 2705");
+  });
+
+  test("create_status_report shows component names when resolvers resolve", async () => {
+    const tool = agentTools.create_status_report;
+    const blocks = await buildConfirmationBlocks({
+      actionId: "cn1",
+      tool,
+      input: {
+        title: "Outage",
+        status: "investigating",
+        message: "msg",
+        pageId: 1,
+        pageComponentIds: [101, 102],
+        componentImpacts: [{ pageComponentId: 101, impact: "major_outage" }],
+      },
+      resolvers: stubResolvers,
+    });
+    const text = (
+      blocks.find((b) => b.type === "section") as { text: { text: string } }
+    ).text.text;
+    expect(text).toContain("*Components:* Svc 101, Svc 102");
+    expect(text).toContain("*Impacts:* Svc 101 → major_outage");
+  });
+
+  test("component line falls back to raw id when a name is missing", async () => {
+    const tool = agentTools.create_status_report;
+    const blocks = await buildConfirmationBlocks({
+      actionId: "cn2",
+      tool,
+      input: {
+        title: "Outage",
+        status: "investigating",
+        message: "msg",
+        pageId: 1,
+        pageComponentIds: [101, 999],
+      },
+      resolvers: {
+        ...stubResolvers,
+        componentNames: () => Promise.resolve(new Map([[101, "Svc 101"]])),
+      },
+    });
+    const text = (
+      blocks.find((b) => b.type === "section") as { text: { text: string } }
+    ).text.text;
+    expect(text).toContain("*Components:* Svc 101, 999");
+  });
+
+  test("create_status_report shows components when provided", async () => {
+    const tool = agentTools.create_status_report;
+    const blocks = await buildConfirmationBlocks({
       actionId: "id1",
       tool,
       input: {
@@ -58,9 +157,9 @@ describe("buildConfirmationBlocks", () => {
     expect(section.text.text).toContain("101, 102");
   });
 
-  test("create_status_report shows impacts when provided", () => {
+  test("create_status_report shows impacts when provided", async () => {
     const tool = agentTools.create_status_report;
-    const blocks = buildConfirmationBlocks({
+    const blocks = await buildConfirmationBlocks({
       actionId: "i1",
       tool,
       input: {
@@ -83,9 +182,9 @@ describe("buildConfirmationBlocks", () => {
     expect(section.text.text).toContain("102 → degraded_performance");
   });
 
-  test("add_status_report_update shows impacts when provided", () => {
+  test("add_status_report_update shows impacts when provided", async () => {
     const tool = agentTools.add_status_report_update;
-    const blocks = buildConfirmationBlocks({
+    const blocks = await buildConfirmationBlocks({
       actionId: "i2",
       tool,
       input: {
@@ -102,9 +201,9 @@ describe("buildConfirmationBlocks", () => {
     expect(section.text.text).toContain("7 → partial_outage");
   });
 
-  test("add_status_report_update has 3 buttons", () => {
+  test("add_status_report_update has 3 buttons", async () => {
     const tool = agentTools.add_status_report_update;
-    const blocks = buildConfirmationBlocks({
+    const blocks = await buildConfirmationBlocks({
       actionId: "abc",
       tool,
       input: {
@@ -126,11 +225,11 @@ describe("buildConfirmationBlocks", () => {
     expect(actions.elements).toHaveLength(3);
   });
 
-  test("update_status_report distinguishes 'clear all' from 'no change' for components", () => {
+  test("update_status_report distinguishes 'clear all' from 'no change' for components", async () => {
     const tool = agentTools.update_status_report;
 
     // pageComponentIds undefined → no Components line at all
-    const noChange = buildConfirmationBlocks({
+    const noChange = await buildConfirmationBlocks({
       actionId: "u1",
       tool,
       input: { statusReportId: 10, title: "X" },
@@ -143,7 +242,7 @@ describe("buildConfirmationBlocks", () => {
     expect(noChangeText).not.toContain("Components");
 
     // pageComponentIds: [] → "(clear all)"
-    const clearAll = buildConfirmationBlocks({
+    const clearAll = await buildConfirmationBlocks({
       actionId: "u2",
       tool,
       input: { statusReportId: 10, pageComponentIds: [] },
@@ -156,7 +255,7 @@ describe("buildConfirmationBlocks", () => {
     expect(clearAllText).toContain("(clear all)");
 
     // pageComponentIds: [1,2] → list
-    const withIds = buildConfirmationBlocks({
+    const withIds = await buildConfirmationBlocks({
       actionId: "u3",
       tool,
       input: { statusReportId: 10, pageComponentIds: [1, 2] },
@@ -169,9 +268,9 @@ describe("buildConfirmationBlocks", () => {
     expect(withIdsText).toContain("1, 2");
   });
 
-  test("update_status_report has 2 buttons (no notify flag)", () => {
+  test("update_status_report has 2 buttons (no notify flag)", async () => {
     const tool = agentTools.update_status_report;
-    const blocks = buildConfirmationBlocks({
+    const blocks = await buildConfirmationBlocks({
       actionId: "xyz",
       tool,
       input: { statusReportId: 10, title: "Updated Title" },
@@ -190,9 +289,9 @@ describe("buildConfirmationBlocks", () => {
     expect(actions.elements[1].action_id).toBe("cancel_xyz");
   });
 
-  test("create_maintenance card shows pageId", () => {
+  test("create_maintenance card shows pageId", async () => {
     const tool = agentTools.create_maintenance;
-    const blocks = buildConfirmationBlocks({
+    const blocks = await buildConfirmationBlocks({
       actionId: "m1",
       tool,
       input: {
@@ -213,9 +312,9 @@ describe("buildConfirmationBlocks", () => {
     expect(text).toContain("7");
   });
 
-  test("resolve_status_report has 3 buttons", () => {
+  test("resolve_status_report has 3 buttons", async () => {
     const tool = agentTools.resolve_status_report;
-    const blocks = buildConfirmationBlocks({
+    const blocks = await buildConfirmationBlocks({
       actionId: "res1",
       tool,
       input: { statusReportId: 5, message: "Issue has been resolved" },
@@ -233,9 +332,9 @@ describe("buildConfirmationBlocks", () => {
     expect(actions.elements).toHaveLength(3);
   });
 
-  test("all blocks include a divider", () => {
+  test("all blocks include a divider", async () => {
     const tool = agentTools.create_status_report;
-    const blocks = buildConfirmationBlocks({
+    const blocks = await buildConfirmationBlocks({
       actionId: "d1",
       tool,
       input: {
@@ -286,11 +385,11 @@ describe("getConfirmationText", () => {
 });
 
 describe("buildConfirmationBlocks (error paths)", () => {
-  test("throws when the tool has no approval metadata", () => {
+  test("rejects when the tool has no approval metadata", async () => {
     const readTool = agentTools.list_status_pages;
-    expect(() =>
+    await expect(
       buildConfirmationBlocks({ actionId: "x", tool: readTool, input: {} }),
-    ).toThrow(/no approval metadata/);
+    ).rejects.toThrow(/no approval metadata/);
   });
 });
 
