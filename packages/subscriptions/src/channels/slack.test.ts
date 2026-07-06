@@ -14,6 +14,7 @@ interface RecordedCall {
   channel: string;
   thread_ts?: string;
   ts?: string;
+  text?: string;
 }
 
 function makeClient(opts: { failPostWith?: string } = {}) {
@@ -25,6 +26,7 @@ function makeClient(opts: { failPostWith?: string } = {}) {
         method: "post",
         channel: args.channel,
         thread_ts: args.thread_ts,
+        text: (args as { text?: string }).text,
       });
       if (opts.failPostWith) {
         const error = new Error("slack error") as Error & {
@@ -96,7 +98,7 @@ describe("createSlackChannel", () => {
     expect(await store.getAnchor(10, 1)).not.toBeNull();
   });
 
-  test("subsequent update replies in thread and re-renders root", async () => {
+  test("subsequent update backfills the first update then replies in thread and re-renders root", async () => {
     const { client, calls } = makeClient();
     const store = createMemoryAnchorStore();
     const channel = createSlackChannel({
@@ -106,16 +108,53 @@ describe("createSlackChannel", () => {
       softUnsubscribe: noopUnsub,
     });
 
-    await channel.sendNotifications([makeSub()], makeUpdate({ updateId: 100 }));
     await channel.sendNotifications(
       [makeSub()],
-      makeUpdate({ updateId: 101, status: "monitoring" }),
+      makeUpdate({ updateId: 100, message: "first update" }),
+    );
+    await channel.sendNotifications(
+      [makeSub()],
+      makeUpdate({ updateId: 101, status: "monitoring", message: "second update" }),
     );
 
     const posts = calls.filter((c) => c.method === "post");
-    expect(posts.length).toBe(2);
+    // root post + backfill of the first update + reply for the second update
+    expect(posts.length).toBe(3);
+    // The first update is preserved in the thread, not lost to the root re-render.
     expect(posts[1]?.thread_ts).toBe("1700000000.0001");
+    expect(posts[1]?.text).toContain("first update");
+    expect(posts[2]?.thread_ts).toBe("1700000000.0001");
+    expect(posts[2]?.text).toContain("second update");
     expect(calls.some((c) => c.method === "update")).toBe(true);
+  });
+
+  test("third update does not backfill the first update again", async () => {
+    const { client, calls } = makeClient();
+    const store = createMemoryAnchorStore();
+    const channel = createSlackChannel({
+      store,
+      createClient: () => client,
+      getBotToken: token,
+      softUnsubscribe: noopUnsub,
+    });
+
+    await channel.sendNotifications(
+      [makeSub()],
+      makeUpdate({ updateId: 100, message: "first update" }),
+    );
+    await channel.sendNotifications(
+      [makeSub()],
+      makeUpdate({ updateId: 101, message: "second update" }),
+    );
+    await channel.sendNotifications(
+      [makeSub()],
+      makeUpdate({ updateId: 102, message: "third update" }),
+    );
+
+    const backfills = calls.filter(
+      (c) => c.method === "post" && c.text?.includes("first update"),
+    );
+    expect(backfills.length).toBe(1);
   });
 
   test("same update delivered twice posts once (idempotent)", async () => {

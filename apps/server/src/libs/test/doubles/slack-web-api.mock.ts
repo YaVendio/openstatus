@@ -23,4 +23,10 @@ export class WebClient {
   conversations = {
     replies: () => s.repliesImpl(),
   };
+  views = {
+    publish: (args: Record<string, unknown>) => {
+      s.calls.push({ method: "views.publish", args });
+      return Promise.resolve({ ok: true });
+    },
+  };
 }

@@ -107,14 +107,20 @@ export function buildRootMessage(
     elements: [
       {
         type: "mrkdwn",
-        text: `Updated ${pageUpdate.date} · <${eventUrl(pageUpdate, subscription)}|View details> · Manage with \`/openstatus remove\``,
+        text: `Updated ${pageUpdate.date} · <${eventUrl(pageUpdate, subscription)}|View details> · Manage with \`/openstatus unsubscribe\``,
       },
     ],
   });
 
+  const title = `${emoji} ${pageUpdate.title} — ${label}`;
   return {
-    text: `${emoji} ${pageUpdate.title} — ${label}`,
-    attachments: [{ color: COLORS[statusColor(pageUpdate.status)], blocks }],
+    // `text` is the notification/accessibility fallback only — it is NOT sent
+    // as the message body, otherwise the title renders twice (once here, once
+    // in the card's header block). See the root post/update calls in slack.ts.
+    text: title,
+    attachments: [
+      { color: COLORS[statusColor(pageUpdate.status)], fallback: title, blocks },
+    ],
   };
 }
 

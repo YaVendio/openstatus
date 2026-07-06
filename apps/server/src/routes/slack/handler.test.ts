@@ -110,6 +110,46 @@ describe("handleSlackEvent", () => {
     expect(json.ok).toBe(true);
   });
 
+  test("publishes the home view on app_home_opened", async () => {
+    const res = await signAndPost(app, {
+      type: "event_callback",
+      team_id: "T_KNOWN",
+      event_id: `evt_home_${Date.now()}`,
+      event: {
+        type: "app_home_opened",
+        tab: "home",
+        user: "U1",
+      },
+    });
+
+    expect(res.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const publish = slackTestState.calls.find(
+      (m) => m.method === "views.publish",
+    );
+    expect(publish).toBeDefined();
+    expect((publish?.args.view as { type: string }).type).toBe("home");
+    expect(publish?.args.user_id).toBe("U1");
+  });
+
+  test("ignores app_home_opened for the messages tab", async () => {
+    const res = await signAndPost(app, {
+      type: "event_callback",
+      team_id: "T_KNOWN",
+      event_id: `evt_home_msgs_${Date.now()}`,
+      event: {
+        type: "app_home_opened",
+        tab: "messages",
+        user: "U1",
+      },
+    });
+
+    expect(res.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(slackTestState.calls.length).toBe(0);
+  });
+
   test("handles app_uninstalled event", async () => {
     const res = await signAndPost(app, {
       type: "event_callback",

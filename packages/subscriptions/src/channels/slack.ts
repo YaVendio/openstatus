@@ -134,7 +134,6 @@ export function createSlackChannel(deps: SlackChannelDeps) {
     const res = await runSlack(sub.id, () =>
       client.postMessage({
         channel: channelId,
-        text: root.text,
         attachments: root.attachments,
       }),
     );
@@ -165,7 +164,6 @@ export function createSlackChannel(deps: SlackChannelDeps) {
       const res = await runSlack(sub.id, () =>
         client.postMessage({
           channel: channelId,
-          text: root.text,
           attachments: root.attachments,
         }),
       );
@@ -174,9 +172,39 @@ export function createSlackChannel(deps: SlackChannelDeps) {
         return res === TEAM_TOKEN_INVALID ? TEAM_TOKEN_INVALID : undefined;
       }
       if (res.ts) {
-        await deps.store.setAnchor(reportId, sub.id, { ts: res.ts, channelId });
+        // Stash this first update so the next one can backfill it into the
+        // thread before the root is re-rendered and its content lost.
+        await deps.store.setAnchor(reportId, sub.id, {
+          ts: res.ts,
+          channelId,
+          pendingRootReply: buildReplyMessage(pageUpdate),
+        });
       }
       return;
+    }
+
+    // The first update only ever lived in the root. Before we overwrite the
+    // root below, post it into the thread so its history is preserved.
+    if (anchor.pendingRootReply) {
+      const backfill = anchor.pendingRootReply;
+      const backfillRes = await runSlack(sub.id, () =>
+        client.postMessage({
+          channel: anchor.channelId,
+          thread_ts: anchor.ts,
+          text: backfill.text,
+          blocks: backfill.blocks,
+        }),
+      );
+      if (!backfillRes || backfillRes === TEAM_TOKEN_INVALID) {
+        await deps.store.releaseDelivery(reportId, sub.id, updateId);
+        return backfillRes === TEAM_TOKEN_INVALID ? TEAM_TOKEN_INVALID : undefined;
+      }
+      // Clear before posting the current reply: if that reply fails and the
+      // delivery is retried, the first update must not be backfilled twice.
+      await deps.store.setAnchor(reportId, sub.id, {
+        ts: anchor.ts,
+        channelId: anchor.channelId,
+      });
     }
 
     const reply = buildReplyMessage(pageUpdate);
@@ -198,7 +226,6 @@ export function createSlackChannel(deps: SlackChannelDeps) {
       client.update({
         channel: anchor.channelId,
         ts: anchor.ts,
-        text: root.text,
         attachments: root.attachments,
       }),
     );

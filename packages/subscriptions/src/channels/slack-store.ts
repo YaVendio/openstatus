@@ -1,8 +1,14 @@
 import { Redis } from "@upstash/redis";
 
+import type { SlackReplyMessage } from "./slack-blocks";
+
 export interface SlackThreadAnchor {
   ts: string;
   channelId: string;
+  // The first update lives only in the root message until a second update
+  // arrives and re-renders the root. We stash its reply payload here so the
+  // next update can backfill it into the thread before it's overwritten.
+  pendingRootReply?: SlackReplyMessage;
 }
 
 export interface SlackAnchorStore {
