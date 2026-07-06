@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import type { PageUpdate, Subscription } from "../types";
-import { type SlackClient, createSlackChannel } from "./slack";
+import {
+  type SlackClient,
+  createSlackChannel,
+  validateSlackConfig,
+} from "./slack";
 import { createMemoryAnchorStore } from "./slack-store";
 
 interface RecordedCall {
@@ -129,6 +133,42 @@ describe("createSlackChannel", () => {
     expect(calls.filter((c) => c.method === "post").length).toBe(1);
   });
 
+  test("failed post releases the reservation so a retry re-posts", async () => {
+    let attempts = 0;
+    const posts: number[] = [];
+    const client: SlackClient = {
+      async postMessage() {
+        attempts += 1;
+        posts.push(attempts);
+        if (attempts === 1) {
+          // Non-terminal error: runSlack returns null, no soft-unsubscribe.
+          const error = new Error("slack error") as Error & {
+            data?: { error?: string };
+          };
+          error.data = { error: "ratelimited" };
+          throw error;
+        }
+        return { ts: "1700000000.0001" };
+      },
+      async update(args) {
+        return { ts: args.ts };
+      },
+    };
+    const store = createMemoryAnchorStore();
+    const channel = createSlackChannel({
+      store,
+      createClient: () => client,
+      getBotToken: token,
+      softUnsubscribe: noopUnsub,
+    });
+
+    await channel.sendNotifications([makeSub()], makeUpdate({ updateId: 100 }));
+    await channel.sendNotifications([makeSub()], makeUpdate({ updateId: 100 }));
+
+    // First attempt failed and released; second attempt reserved again and posted.
+    expect(posts.length).toBe(2);
+  });
+
   test("missing bot token delivers nothing", async () => {
     const { client, calls } = makeClient();
     const channel = createSlackChannel({
@@ -176,5 +216,51 @@ describe("createSlackChannel", () => {
     expect(calls.filter((c) => c.method === "post").length).toBe(1);
     expect(calls.some((c) => c.method === "update")).toBe(false);
     expect(await store.getAnchor(10, 1)).toBeNull();
+  });
+});
+
+describe("validateSlackConfig", () => {
+  test("accepts non-empty teamId and channelId strings", async () => {
+    const result = await validateSlackConfig({
+      teamId: "T1",
+      channelId: "C1",
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  const invalidConfigs: Array<{ label: string; config: unknown }> = [
+    { label: "null config", config: null },
+    { label: "non-object", config: "T1" },
+    { label: "missing teamId", config: { channelId: "C1" } },
+    { label: "missing channelId", config: { teamId: "T1" } },
+    { label: "null teamId", config: { teamId: null, channelId: "C1" } },
+    { label: "numeric channelId", config: { teamId: "T1", channelId: 42 } },
+    { label: "empty teamId", config: { teamId: "", channelId: "C1" } },
+    { label: "empty channelId", config: { teamId: "T1", channelId: "" } },
+  ];
+
+  for (const { label, config } of invalidConfigs) {
+    test(`rejects ${label}`, async () => {
+      const result = await validateSlackConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.error).toBeDefined();
+    });
+  }
+});
+
+describe("reserveDelivery (memory store)", () => {
+  test("only the first reservation for a key wins", async () => {
+    const store = createMemoryAnchorStore();
+    expect(await store.reserveDelivery(1, 2, 3)).toBe(true);
+    expect(await store.reserveDelivery(1, 2, 3)).toBe(false);
+    // A different updateId is an independent reservation.
+    expect(await store.reserveDelivery(1, 2, 4)).toBe(true);
+  });
+
+  test("releaseDelivery makes the key reservable again", async () => {
+    const store = createMemoryAnchorStore();
+    expect(await store.reserveDelivery(1, 2, 3)).toBe(true);
+    await store.releaseDelivery(1, 2, 3);
+    expect(await store.reserveDelivery(1, 2, 3)).toBe(true);
   });
 });

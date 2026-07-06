@@ -16,13 +16,17 @@ export interface SlackAnchorStore {
     anchor: SlackThreadAnchor,
   ): Promise<void>;
   clearAnchor(reportId: number, subscriberId: number): Promise<void>;
-  isDelivered(
+  // Atomically claim delivery of (report, subscriber, update). Returns true only
+  // for the caller that wins the claim; concurrent callers get false and must
+  // skip. This is the dedupe reservation — a single atomic op, not a
+  // read-then-write pair, so two dispatchers can't both post the same message.
+  reserveDelivery(
     reportId: number,
     subscriberId: number,
     updateId: number,
   ): Promise<boolean>;
-  // Recorded only after a successful post, so a failed delivery can be retried.
-  markDelivered(
+  // Release a reservation whose post failed, so the delivery can be retried.
+  releaseDelivery(
     reportId: number,
     subscriberId: number,
     updateId: number,
@@ -68,16 +72,16 @@ export function createRedisAnchorStore(): SlackAnchorStore {
     async clearAnchor(reportId, subscriberId) {
       await getRedis().del(anchorKey(reportId, subscriberId));
     },
-    async isDelivered(reportId, subscriberId, updateId) {
-      const res = await getRedis().get<number>(
+    async reserveDelivery(reportId, subscriberId, updateId) {
+      const res = await getRedis().set(
         deliveredKey(reportId, subscriberId, updateId),
+        1,
+        { ex: TTL_SECONDS, nx: true },
       );
-      return res !== null;
+      return res === "OK";
     },
-    async markDelivered(reportId, subscriberId, updateId) {
-      await getRedis().set(deliveredKey(reportId, subscriberId, updateId), 1, {
-        ex: TTL_SECONDS,
-      });
+    async releaseDelivery(reportId, subscriberId, updateId) {
+      await getRedis().del(deliveredKey(reportId, subscriberId, updateId));
     },
   };
 }
@@ -95,11 +99,14 @@ export function createMemoryAnchorStore(): SlackAnchorStore {
     async clearAnchor(reportId, subscriberId) {
       anchors.delete(anchorKey(reportId, subscriberId));
     },
-    async isDelivered(reportId, subscriberId, updateId) {
-      return delivered.has(deliveredKey(reportId, subscriberId, updateId));
+    async reserveDelivery(reportId, subscriberId, updateId) {
+      const key = deliveredKey(reportId, subscriberId, updateId);
+      if (delivered.has(key)) return false;
+      delivered.add(key);
+      return true;
     },
-    async markDelivered(reportId, subscriberId, updateId) {
-      delivered.add(deliveredKey(reportId, subscriberId, updateId));
+    async releaseDelivery(reportId, subscriberId, updateId) {
+      delivered.delete(deliveredKey(reportId, subscriberId, updateId));
     },
   };
 }

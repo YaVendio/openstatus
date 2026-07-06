@@ -1,4 +1,4 @@
-import { db, eq, or } from "@openstatus/db";
+import { db, eq, or, sql } from "@openstatus/db";
 import { page } from "@openstatus/db/src/schema";
 
 const BASE_DOMAIN_SUFFIX = ".openstatus.dev";
@@ -58,7 +58,12 @@ export async function resolvePageFromUrl(
       customDomain: page.customDomain,
     })
     .from(page)
-    .where(or(eq(page.customDomain, host), eq(page.customDomain, bareHost)))
+    .where(
+      or(
+        sql`LOWER(${page.customDomain}) = ${host}`,
+        sql`LOWER(${page.customDomain}) = ${bareHost}`,
+      ),
+    )
     .get();
   return row ?? null;
 }

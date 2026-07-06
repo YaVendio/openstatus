@@ -135,7 +135,9 @@ export function createSlackChannel(deps: SlackChannelDeps) {
       return;
     }
 
-    if (await deps.store.isDelivered(reportId, sub.id, updateId)) return;
+    // Atomic dedupe: only the caller that wins this reservation posts. On a
+    // failed post we release it below so the delivery stays retriable.
+    if (!(await deps.store.reserveDelivery(reportId, sub.id, updateId))) return;
 
     const anchor = await deps.store.getAnchor(reportId, sub.id);
     const root = buildRootMessage(pageUpdate, sub);
@@ -148,11 +150,13 @@ export function createSlackChannel(deps: SlackChannelDeps) {
           attachments: root.attachments,
         }),
       );
-      if (!res) return;
+      if (!res) {
+        await deps.store.releaseDelivery(reportId, sub.id, updateId);
+        return;
+      }
       if (res.ts) {
         await deps.store.setAnchor(reportId, sub.id, { ts: res.ts, channelId });
       }
-      await deps.store.markDelivered(reportId, sub.id, updateId);
       return;
     }
 
@@ -165,8 +169,10 @@ export function createSlackChannel(deps: SlackChannelDeps) {
         blocks: reply.blocks,
       }),
     );
-    if (!replyRes) return;
-    await deps.store.markDelivered(reportId, sub.id, updateId);
+    if (!replyRes) {
+      await deps.store.releaseDelivery(reportId, sub.id, updateId);
+      return;
+    }
 
     // Re-render the root so its emoji/status track the latest state.
     await runSlack(sub.id, () =>
@@ -248,8 +254,10 @@ export async function validateSlackConfig(
   if (
     config !== null &&
     typeof config === "object" &&
-    "teamId" in config &&
-    "channelId" in config
+    typeof (config as { teamId?: unknown }).teamId === "string" &&
+    (config as { teamId: string }).teamId.length > 0 &&
+    typeof (config as { channelId?: unknown }).channelId === "string" &&
+    (config as { channelId: string }).channelId.length > 0
   ) {
     return { valid: true };
   }
