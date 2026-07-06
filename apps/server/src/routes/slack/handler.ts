@@ -180,8 +180,8 @@ async function processEvent(body: SlackEvent) {
   const botUserId = resolved.botUserId;
   const threadTs = event.thread_ts ?? event.ts;
 
-  if (event.type === "message" && event.channel_type !== "im") {
-    if (!event.text?.includes(`<@${botUserId}>`)) return;
+  if (event.type === "message" && !event.text?.includes(`<@${botUserId}>`)) {
+    return;
   }
 
   logger.info("slack event received", {

@@ -259,7 +259,7 @@ describe("handleSlackEvent", () => {
     expect(slackTestState.calls.length).toBe(0);
   });
 
-  test("processes DM messages without bot mention", async () => {
+  test("ignores DM messages", async () => {
     const res = await signAndPost(app, {
       type: "event_callback",
       team_id: "T_KNOWN",
@@ -276,8 +276,7 @@ describe("handleSlackEvent", () => {
 
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 50));
-    // DM should trigger a response (postMessage for "Thinking...")
-    expect(slackTestState.calls.length).toBeGreaterThan(0);
+    expect(slackTestState.calls.length).toBe(0);
   });
 
   test("ignores events without channel", async () => {
