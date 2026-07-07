@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { usePathnamePrefix } from "../../hooks/use-pathname-prefix";
 import { useTRPC } from "../../lib/trpc/client";
 import { Link } from "../common/link";
+import { YavendioWordmark } from "./yavendio-wordmark";
 import {
   type StatusUpdateType,
   StatusUpdates,
@@ -129,16 +130,8 @@ export function Header({
             rel={page?.homepageUrl ? "noreferrer" : undefined}
             className="flex items-center"
           >
-            <img
-              src="/yavendio-status-light.svg"
-              alt={`${page?.title ?? "YaVendio"} status page`}
-              className="block h-7 w-auto dark:hidden"
-            />
-            <img
-              src="/yavendio-status-dark.svg"
-              alt={`${page?.title ?? "YaVendio"} status page`}
-              className="hidden h-7 w-auto dark:block"
-            />
+            <YavendioWordmark className="text-foreground h-7 w-auto" />
+            <span className="sr-only">{`${page?.title ?? "YaVendio"} status page`}</span>
           </Link>
         </StatusPageHeaderBrand>
         <NavDesktop className="hidden md:flex" />
