@@ -6,8 +6,6 @@ import {
   StatusPageHeader,
   StatusPageHeaderActions,
   StatusPageHeaderBrand,
-  StatusPageHeaderBrandButton,
-  StatusPageHeaderBrandFallback,
   StatusPageHeaderContent,
   StatusPageHeaderNav,
   StatusPageHeaderNavItem,
@@ -124,28 +122,24 @@ export function Header({
       {...props}
     >
       <StatusPageHeaderContent>
-        {/* NOTE: same width as the `StatusUpdates` button */}
-        <StatusPageHeaderBrand>
-          <div className="flex items-center justify-center">
-            <StatusPageHeaderBrandButton>
-              <Link
-                href={page?.homepageUrl || `/${prefix}`}
-                target={page?.homepageUrl ? "_blank" : undefined}
-                rel={page?.homepageUrl ? "noreferrer" : undefined}
-              >
-                {page?.icon ? (
-                  <img
-                    src={page.icon}
-                    alt={`${page.title} status page`}
-                    className="size-8"
-                  />
-                ) : (
-                  // NOTE: show the first two letters of the title and if its multiple words, show the first letter of the first two words
-                  <StatusPageHeaderBrandFallback title={page?.title} />
-                )}
-              </Link>
-            </StatusPageHeaderBrandButton>
-          </div>
+        <StatusPageHeaderBrand className="w-auto">
+          <Link
+            href={page?.homepageUrl || `/${prefix}`}
+            target={page?.homepageUrl ? "_blank" : undefined}
+            rel={page?.homepageUrl ? "noreferrer" : undefined}
+            className="flex items-center"
+          >
+            <img
+              src="/yavendio-status-light.svg"
+              alt={`${page?.title ?? "YaVendio"} status page`}
+              className="block h-7 w-auto dark:hidden"
+            />
+            <img
+              src="/yavendio-status-dark.svg"
+              alt={`${page?.title ?? "YaVendio"} status page`}
+              className="hidden h-7 w-auto dark:block"
+            />
+          </Link>
         </StatusPageHeaderBrand>
         <NavDesktop className="hidden md:flex" />
         <StatusPageHeaderActions>
