@@ -76,10 +76,11 @@ status_report_update
 ### A3. Read path (render + feeds)
 
 - Apply `resolveLocalized(...)` at the **read boundary** that assembles reports for the status-page, so render components (`StatusFeed`, event pages) receive already-resolved strings and are **not modified**.
-- Boundaries to cover (all locale-scoped under `[locale]`):
-  - Status page + `events/` report/detail rendering.
-  - **Public feeds** — `feed/json/route.ts`, `feed/[type]/route.ts` (RSS), `llms.txt/route.ts`. These already receive `locale` from the route; a `pt` feed must return `pt` content. **This is what powers workstream B.**
-- The resolver is a small shared helper (e.g. `packages/services` util or a status-page lib) reused by every boundary.
+- Applied inside the tRPC read procedures — `statusPage.get`, `getLight`, AND `getReport` (the incident-detail page uses `getReport`, a separate boundary) — so every consumer gets pre-resolved content:
+  - Status page (`client.tsx`, `header.tsx`), `events/` list, and the incident **detail** page + its layout (`getReport`).
+  - **Public feeds** (locale-scoped under `[locale]`): `feed/json/route.ts`, `feed/[type]/route.ts` (RSS), `llms.txt/route.ts`. These receive `locale` from the route; a `pt` feed must return `pt` content. **This is what powers workstream B.**
+- **Accepted base-only** (machine/agent surfaces with NO `[locale]` segment): `api/status/[[...path]]` (`summary.json`/`incidents.json`) and `api/markdown/[[...path]]` (`.md`) render report text but stay base/default-locale by design — they are not visitor HTML.
+- The resolver is the pure `resolveLocalized` helper in `@openstatus/locales`, reused by every boundary.
 
 ### A4. Locales & page config
 
@@ -117,7 +118,7 @@ status_report_update
 ### B4. UX
 
 - Dismiss via `localStorage` keyed `status-banner-dismissed:<reportId>:<latestUpdateId>:<severity>` → **reappears** when the latest update or severity changes; auto-hides when no active report (resolved).
-- Severity → banner color (ya-brand tokens: degraded=warning, partial=orange, major=destructive). Link → `https://status.yavendio.com` (root; shown in the merchant's language via the page default/switcher).
+- Severity → banner color using **real web-app tokens**: `major`/`partial` → `bg-destructive/15 text-destructive`; `degraded`/`info` → neutral `bg-muted`. A distinct third color for `degraded` (a `warning` token) does not exist in web-app today; introducing one is deferred to the `ya-brand` gate (Task B4). Severity is computed across ALL active reports (worst wins), reflecting current per-component impact. Link → `https://status.yavendio.com` (root; shown in the merchant's language via the page default/switcher).
 - No secrets, no auth.
 
 ### B5. Gates
@@ -146,6 +147,7 @@ status_report_update
 - **Subscriber emails** (Resend) — `notify` OFF + placeholder key; if ever enabled they use base language.
 - **Banner analytics** (PostHog) — optional follow-up.
 - **Banner on the public landing** (`yv-landing-v2`) — not this iteration (dashboard only).
+- **Machine/agent surfaces without a `[locale]` segment** (`api/status/*` JSON, `api/markdown/*` `.md`) — render base/default-locale content; localizing them would need `Accept-Language` handling, deferred.
 
 ---
 
@@ -165,4 +167,4 @@ status_report_update
 - **Migration safety:** additive nullable columns — no data rewrite, trivially reversible (`DROP COLUMN`); legacy rows unaffected.
 - **Fork divergence:** all A changes are additive on top of upstream (no signature removals) → minimizes rebase pain. Base columns remain the upstream contract.
 - **Banner availability:** if the feed is unreachable/slow, the server fetch must fail **open** (render nothing, never block or error the dashboard). ISR/`revalidate` isolates dashboard render from status-page latency.
-- **Rollback:** A → redeploy previous `server`/`status-page` image tags + leave columns (harmless); B → remove the banner mount (single layout line) / feature-flag it off.
+- **Rollback:** A → redeploy previous `server`/`status-page` image tags + leave columns (harmless *while B is not live*). ⚠️ **Once B (the dashboard banner) is live, a `status-page` rollback below the A7 commit is NOT harmless:** the pre-A7 `feed/json` drops `componentImpacts` and reverts to base-language text, so the banner (failing open) shows every active incident as `info` severity in the base language fleet-wide — during an incident window. Roll `status-page` back only to an A7-or-later tag, or roll B back first. B → remove the banner mount (single layout line) / feature-flag it off.
