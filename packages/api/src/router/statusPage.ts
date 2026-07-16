@@ -15,6 +15,7 @@ import {
   selectWorkspaceSchema,
   statusReport,
 } from "@openstatus/db/src/schema";
+import { defaultLocale, resolveLocalized } from "@openstatus/locales";
 import {
   getSubscriberByToken,
   hasPendingSubscriber,
@@ -86,6 +87,28 @@ const gateFieldsSchema = selectPageSchema.pick({
   contactUrl: true,
 });
 
+// Only title/message are overwritten; the raw i18n maps stay in the payload
+// (the select schema marks them present, and the content is public anyway).
+function localizeReports<
+  R extends {
+    title: string;
+    titleI18n?: Partial<Record<string, string>> | null;
+    statusReportUpdates: {
+      message: string;
+      messageI18n?: Partial<Record<string, string>> | null;
+    }[];
+  },
+>(reports: R[], activeLocale: string): R[] {
+  return reports.map((r) => ({
+    ...r,
+    title: resolveLocalized(r.titleI18n, r.title, activeLocale),
+    statusReportUpdates: r.statusReportUpdates.map((u) => ({
+      ...u,
+      message: resolveLocalized(u.messageI18n, u.message, activeLocale),
+    })),
+  }));
+}
+
 export const statusPageRouter = createTRPCRouter({
   get: publicProcedure
     .input(
@@ -96,6 +119,7 @@ export const statusPageRouter = createTRPCRouter({
           .enum(["requests", "duration", "dominant", "manual"])
           .nullish(),
         barType: z.enum(["absolute", "dominant", "manual"]).nullish(),
+        locale: z.string().optional(),
       }),
     )
     .output(selectPublicPageSchemaWithRelation.nullish())
@@ -423,13 +447,16 @@ export const statusPageRouter = createTRPCRouter({
             )
           : pageComponents;
 
+      const activeLocale =
+        opts.input.locale ?? _page.defaultLocale ?? defaultLocale;
+
       return selectPublicPageSchemaWithRelation.parse({
         ..._page,
         monitors,
         monitorGroups,
         trackers,
         incidents: monitors.flatMap((m) => m.incidents) ?? [],
-        statusReports,
+        statusReports: localizeReports(statusReports, activeLocale),
         maintenances,
         workspacePlan: _page.workspace.plan,
         status,
@@ -442,7 +469,12 @@ export const statusPageRouter = createTRPCRouter({
     }),
 
   getLight: publicProcedure
-    .input(z.object({ slug: z.string().toLowerCase() }))
+    .input(
+      z.object({
+        slug: z.string().toLowerCase(),
+        locale: z.string().optional(),
+      }),
+    )
     .query(async (opts) => {
       if (!opts.input.slug) return null;
 
@@ -508,11 +540,14 @@ export const statusPageRouter = createTRPCRouter({
       const ws = selectWorkspaceSchema.safeParse(_page.workspace);
       const whiteLabel = ws.data?.limits["white-label"] ?? false;
 
+      const activeLocale =
+        opts.input.locale ?? _page.defaultLocale ?? defaultLocale;
+
       return selectPublicPageLightSchemaWithRelation.parse({
         ..._page,
         monitors,
         incidents,
-        statusReports: _page.statusReports,
+        statusReports: localizeReports(_page.statusReports, activeLocale),
         maintenances: _page.maintenances,
         pageComponents: _page.pageComponents,
         pageComponentGroups: _page.pageComponentGroups,
@@ -810,7 +845,13 @@ export const statusPageRouter = createTRPCRouter({
   }),
 
   getReport: publicProcedure
-    .input(z.object({ slug: z.string().toLowerCase(), id: z.number() }))
+    .input(
+      z.object({
+        slug: z.string().toLowerCase(),
+        id: z.number(),
+        locale: z.string().optional(),
+      }),
+    )
     .query(async (opts) => {
       if (!opts.input.slug) return null;
 
@@ -842,7 +883,11 @@ export const statusPageRouter = createTRPCRouter({
 
       if (!_report) return null;
 
-      const result: z.infer<typeof selectStatusReportPageSchema> = _report;
+      const activeLocale =
+        opts.input.locale ?? _page.defaultLocale ?? defaultLocale;
+
+      const result: z.infer<typeof selectStatusReportPageSchema> =
+        localizeReports([_report], activeLocale)[0];
       return selectStatusReportPageSchema.parse(result);
     }),
 
