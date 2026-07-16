@@ -164,6 +164,15 @@ export const statusPageRouter = createTRPCRouter({
 
       if (!_page) return null;
 
+      // Resolve before getEvents runs: it copies report.title into event.name,
+      // which the banner tab labels render.
+      const activeLocale =
+        opts.input.locale ?? _page.defaultLocale ?? defaultLocale;
+      const localizedReports = localizeReports(
+        _page.statusReports,
+        activeLocale,
+      );
+
       const ws = selectWorkspaceSchema.safeParse(_page.workspace);
       const pageComponents = selectPageComponentWithMonitorRelation
         .array()
@@ -188,7 +197,7 @@ export const statusPageRouter = createTRPCRouter({
         const events = getEvents({
           maintenances: _page.maintenances,
           incidents: c.monitor?.incidents ?? [],
-          reports: _page.statusReports,
+          reports: localizedReports,
           pageComponentId: c.id,
           monitorId: c.monitorId ?? undefined,
           componentType: c.type,
@@ -244,7 +253,7 @@ export const statusPageRouter = createTRPCRouter({
         const events = getEvents({
           maintenances: _page.maintenances,
           incidents: c.monitor.incidents ?? [],
-          reports: _page.statusReports,
+          reports: localizedReports,
           monitorId: c.monitor.id,
         });
         const status =
@@ -285,7 +294,7 @@ export const statusPageRouter = createTRPCRouter({
       const pageEvents = getEvents({
         maintenances: _page.maintenances,
         incidents: monitorComponents.flatMap((c) => c.monitor.incidents ?? []),
-        reports: _page.statusReports,
+        reports: localizedReports,
         // No monitorId provided, so we get all events for the page
       });
 
@@ -414,7 +423,7 @@ export const statusPageRouter = createTRPCRouter({
 
       const whiteLabel = ws.data?.limits["white-label"] ?? false;
 
-      const statusReports = _page.statusReports.sort((a, b) => {
+      const statusReports = localizedReports.sort((a, b) => {
         // Sort reports without updates to the beginning
         if (
           a.statusReportUpdates.length === 0 &&
@@ -447,16 +456,13 @@ export const statusPageRouter = createTRPCRouter({
             )
           : pageComponents;
 
-      const activeLocale =
-        opts.input.locale ?? _page.defaultLocale ?? defaultLocale;
-
       return selectPublicPageSchemaWithRelation.parse({
         ..._page,
         monitors,
         monitorGroups,
         trackers,
         incidents: monitors.flatMap((m) => m.incidents) ?? [],
-        statusReports: localizeReports(statusReports, activeLocale),
+        statusReports,
         maintenances,
         workspacePlan: _page.workspace.plan,
         status,

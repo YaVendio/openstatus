@@ -155,4 +155,18 @@ describe("resolve report content by locale", () => {
     const report = full?.statusReports.find((r) => r.id === testReportId);
     expect(report?.title).toBe("Shipping issues");
   });
+
+  // getEvents copies report.title into event.name, which the banner tab
+  // labels render — so it must see the resolved title, not the base one.
+  test("get resolves the report title in openEvents names", async () => {
+    const full = await caller.statusPage.get({
+      slug: testSlug,
+      locale: "en",
+    });
+
+    const event = full?.openEvents.find(
+      (e) => e.type === "report" && e.id === testReportId,
+    );
+    expect(event?.name).toBe("Shipping issues");
+  });
 });
