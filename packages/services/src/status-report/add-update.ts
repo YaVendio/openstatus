@@ -96,6 +96,7 @@ export async function addStatusReportUpdate(args: {
         status: input.status,
         date,
         message: input.message,
+        messageI18n: input.messageI18n ?? null,
       })
       .returning()
       .get();

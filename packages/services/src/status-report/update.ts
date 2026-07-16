@@ -64,6 +64,7 @@ export async function updateStatusReport(args: {
     const updateValues: Record<string, unknown> = { updatedAt: new Date() };
     if (input.title !== undefined) updateValues.title = input.title;
     if (input.status !== undefined) updateValues.status = input.status;
+    if (input.titleI18n !== undefined) updateValues.titleI18n = input.titleI18n;
 
     if (input.pageComponentIds !== undefined) {
       const validated = await validatePageComponentIds({

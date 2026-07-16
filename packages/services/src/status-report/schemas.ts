@@ -2,6 +2,7 @@ import {
   pageComponentImpactSchema,
   statusReportStatusSchema,
 } from "@openstatus/db/src/schema";
+import { locales } from "@openstatus/locales";
 import { z } from "zod";
 
 export { statusReportStatusSchema };
@@ -21,6 +22,10 @@ export const componentImpactsSchema = z
   );
 export type ComponentImpacts = z.infer<typeof componentImpactsSchema>;
 
+export const localizedTextSchema = z
+  .partialRecord(z.enum(locales), z.string())
+  .optional();
+
 /** Periods supported by the status-report list filter — matches tRPC today. */
 export const statusReportListPeriods = ["1d", "7d", "14d"] as const;
 export type StatusReportListPeriod = (typeof statusReportListPeriods)[number];
@@ -28,8 +33,10 @@ export const statusReportListPeriodSchema = z.enum(statusReportListPeriods);
 
 export const CreateStatusReportInput = z.object({
   title: z.string().min(1).max(256),
+  titleI18n: localizedTextSchema,
   status: statusReportStatusSchema,
   message: z.string(),
+  messageI18n: localizedTextSchema,
   date: z.coerce.date(),
   pageId: z.number().int(),
   pageComponentIds: z.array(z.number().int()).default([]),
@@ -41,6 +48,7 @@ export type CreateStatusReportInput = z.infer<typeof CreateStatusReportInput>;
 export const UpdateStatusReportInput = z.object({
   id: z.number().int(),
   title: z.string().min(1).max(256).optional(),
+  titleI18n: localizedTextSchema,
   status: statusReportStatusSchema.optional(),
   /** When provided, replaces the full association set (empty array clears). */
   pageComponentIds: z.array(z.number().int()).optional(),
@@ -51,6 +59,7 @@ export const AddStatusReportUpdateInput = z.object({
   statusReportId: z.number().int(),
   status: statusReportStatusSchema,
   message: z.string(),
+  messageI18n: localizedTextSchema,
   date: z.coerce.date().optional(),
   /**
    * Impact changes this update sets. Omitted components keep their prior
@@ -77,6 +86,7 @@ export type UpdateStatusReportUpdateInput = z.infer<
 export const ResolveStatusReportInput = z.object({
   statusReportId: z.number().int(),
   message: z.string(),
+  messageI18n: localizedTextSchema,
   date: z.coerce.date().optional(),
 });
 export type ResolveStatusReportInput = z.infer<typeof ResolveStatusReportInput>;

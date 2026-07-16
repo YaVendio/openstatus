@@ -25,6 +25,7 @@ export async function resolveStatusReport(args: {
       statusReportId: input.statusReportId,
       status: "resolved",
       message: input.message,
+      messageI18n: input.messageI18n,
       date: input.date,
     },
   });
