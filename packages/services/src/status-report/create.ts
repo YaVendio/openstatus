@@ -65,6 +65,7 @@ export async function createStatusReport(args: {
         workspaceId: ctx.workspace.id,
         pageId: input.pageId,
         title: input.title,
+        titleI18n: input.titleI18n ?? null,
         status: input.status,
       })
       .returning()
@@ -83,6 +84,7 @@ export async function createStatusReport(args: {
         status: input.status,
         date: input.date,
         message: input.message,
+        messageI18n: input.messageI18n ?? null,
       })
       .returning()
       .get();

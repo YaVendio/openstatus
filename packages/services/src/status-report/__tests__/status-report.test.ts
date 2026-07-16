@@ -1146,3 +1146,60 @@ describe("componentImpacts", () => {
     });
   });
 });
+
+describe("incident i18n", () => {
+  test("persists titleI18n / messageI18n and defaults omission to null", async () => {
+    await withTestTransaction(async (tx) => {
+      const ctx = { ...teamCtx, db: tx };
+      const titleI18n = { en: "Delivery issues", pt: "Problemas de envio" };
+      const messageI18n = {
+        en: "We are investigating",
+        pt: "Estamos investigando",
+      };
+
+      const { statusReport: report, initialUpdate } = await createStatusReport({
+        ctx,
+        input: {
+          title: `${TEST_PREFIX}-i18n`,
+          titleI18n,
+          status: "investigating",
+          message: "We are investigating",
+          messageI18n,
+          date: new Date(),
+          pageId: testPageId,
+          pageComponentIds: [],
+        },
+      });
+
+      const reportRow = await tx
+        .select()
+        .from(statusReport)
+        .where(eq(statusReport.id, report.id))
+        .get();
+      expect(reportRow?.titleI18n).toEqual(titleI18n);
+
+      const updateRow = await tx
+        .select()
+        .from(statusReportUpdate)
+        .where(eq(statusReportUpdate.id, initialUpdate.id))
+        .get();
+      expect(updateRow?.messageI18n).toEqual(messageI18n);
+
+      const { statusReportUpdate: plainUpdate } = await addStatusReportUpdate({
+        ctx,
+        input: {
+          statusReportId: report.id,
+          status: "monitoring",
+          message: "no translations here",
+        },
+      });
+
+      const plainUpdateRow = await tx
+        .select()
+        .from(statusReportUpdate)
+        .where(eq(statusReportUpdate.id, plainUpdate.id))
+        .get();
+      expect(plainUpdateRow?.messageI18n).toBeNull();
+    });
+  });
+});

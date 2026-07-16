@@ -24,9 +24,17 @@ import { useTRPC } from "../../../../../../../../../lib/trpc/client";
 export default function ReportPage() {
   const t = useExtracted();
   const trpc = useTRPC();
-  const { id, domain } = useParams<{ id: string; domain: string }>();
+  const { id, domain, locale } = useParams<{
+    id: string;
+    domain: string;
+    locale: string;
+  }>();
   const { data: report } = useQuery(
-    trpc.statusPage.getReport.queryOptions({ id: Number(id), slug: domain }),
+    trpc.statusPage.getReport.queryOptions({
+      id: Number(id),
+      slug: domain,
+      locale,
+    }),
   );
 
   if (!report) {

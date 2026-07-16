@@ -1,5 +1,6 @@
 "use client";
 
+import { resolveLocalized } from "@openstatus/locales";
 import {
   Tabs,
   TabsContent,
@@ -7,10 +8,11 @@ import {
   TabsTrigger,
 } from "@openstatus/ui/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
-import { useExtracted } from "next-intl";
+import { useExtracted, useLocale } from "next-intl";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQueryStates } from "nuqs";
+import { useMemo } from "react";
 
 import { StatusBlankEvents } from "../../../../../../../components/status-page/status-blank";
 import {
@@ -32,6 +34,7 @@ import { searchParamsParsers } from "./search-params";
 
 export default function Page() {
   const t = useExtracted();
+  const locale = useLocale();
   const [{ tab }, setSearchParams] = useQueryStates(searchParamsParsers);
   const { domain } = useParams<{ domain: string }>();
   const trpc = useTRPC();
@@ -39,9 +42,24 @@ export default function Page() {
     trpc.statusPage.get.queryOptions({ slug: domain }),
   );
 
+  // The query omits `locale` to keep the queryKey matching the server prefetch,
+  // so resolve to the visitor's locale here off the raw i18n maps.
+  const statusReports = useMemo(
+    () =>
+      page?.statusReports.map((report) => ({
+        ...report,
+        title: resolveLocalized(report.titleI18n, report.title, locale),
+        statusReportUpdates: report.statusReportUpdates.map((update) => ({
+          ...update,
+          message: resolveLocalized(update.messageI18n, update.message, locale),
+        })),
+      })) ?? [],
+    [page, locale],
+  );
+
   if (!page) return null;
 
-  const { statusReports, maintenances } = page;
+  const { maintenances } = page;
 
   return (
     <Tabs

@@ -7,14 +7,14 @@ export const revalidate = 60;
 
 export async function GET(
   _request: Request,
-  props: { params: Promise<{ domain: string }> },
+  props: { params: Promise<{ domain: string; locale: string }> },
 ) {
   try {
     const queryClient = getQueryClient();
-    const { domain } = await props.params;
+    const { domain, locale } = await props.params;
 
     const _page = await queryClient.fetchQuery(
-      trpc.statusPage.getLight.queryOptions({ slug: domain }),
+      trpc.statusPage.getLight.queryOptions({ slug: domain, locale }),
     );
 
     if (!_page) return notFound();
@@ -40,7 +40,7 @@ export async function GET(
     }
 
     const page = await queryClient.fetchQuery(
-      trpc.statusPage.get.queryOptions({ slug: domain }),
+      trpc.statusPage.get.queryOptions({ slug: domain, locale }),
     );
 
     if (!page) return notFound();
@@ -106,6 +106,9 @@ export async function GET(
           message: update.message,
           date: update.date,
           updatedAt: update.updatedAt,
+          componentImpacts: update.statusReportUpdateToPageComponents.map(
+            (x) => ({ pageComponentId: x.pageComponentId, impact: x.impact }),
+          ),
         })),
       })),
     };
