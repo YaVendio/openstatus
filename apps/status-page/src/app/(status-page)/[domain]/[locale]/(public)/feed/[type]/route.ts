@@ -17,16 +17,16 @@ export const revalidate = 60;
 
 export async function GET(
   _request: Request,
-  props: { params: Promise<{ domain: string; type: string }> },
+  props: { params: Promise<{ domain: string; type: string; locale: string }> },
 ) {
   try {
     const queryClient = getQueryClient();
-    const { domain, type } = await props.params;
+    const { domain, type, locale } = await props.params;
 
     if (!["rss", "atom"].includes(type)) return notFound();
 
     const _page = await queryClient.fetchQuery(
-      trpc.statusPage.getLight.queryOptions({ slug: domain }),
+      trpc.statusPage.getLight.queryOptions({ slug: domain, locale }),
     );
     if (!_page) return notFound();
 
@@ -51,7 +51,7 @@ export async function GET(
     }
 
     const page = await queryClient.fetchQuery(
-      trpc.statusPage.get.queryOptions({ slug: domain }),
+      trpc.statusPage.get.queryOptions({ slug: domain, locale }),
     );
     if (!page) return notFound();
 

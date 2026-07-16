@@ -27,9 +27,9 @@ export default async function Layout({
   params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ id: string; domain: string }>;
+  params: Promise<{ id: string; domain: string; locale: string }>;
 }) {
-  const { id, domain } = await params;
+  const { id, domain, locale } = await params;
   const numericId = Number(id);
 
   if (Number.isNaN(numericId)) {
@@ -41,6 +41,7 @@ export default async function Layout({
     trpc.statusPage.getReport.queryOptions({
       id: numericId,
       slug: domain,
+      locale,
     }),
   );
   return <HydrateClient>{children}</HydrateClient>;

@@ -85,9 +85,9 @@ function render({
 
 export async function GET(
   _request: Request,
-  props: { params: Promise<{ domain: string }> },
+  props: { params: Promise<{ domain: string; locale: string }> },
 ) {
-  const { domain } = await props.params;
+  const { domain, locale } = await props.params;
   const prefix = domain.toLowerCase();
 
   const row = await db
@@ -106,7 +106,7 @@ export async function GET(
   if (row.accessType !== "public") return notFound();
 
   const data = await getQueryClient().fetchQuery(
-    trpc.statusPage.get.queryOptions({ slug: row.slug }),
+    trpc.statusPage.get.queryOptions({ slug: row.slug, locale }),
   );
   if (!data) return notFound();
 

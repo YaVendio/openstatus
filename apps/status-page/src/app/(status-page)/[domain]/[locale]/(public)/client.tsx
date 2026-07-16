@@ -1,5 +1,6 @@
 "use client";
 
+import { resolveLocalized } from "@openstatus/locales";
 import {
   StatusComponent,
   StatusComponentBody,
@@ -24,6 +25,7 @@ import {
 import { Separator } from "@openstatus/ui/components/ui/separator";
 import { cn } from "@openstatus/ui/lib/utils";
 import { skipToken, useQuery } from "@tanstack/react-query";
+import { useLocale } from "next-intl";
 import { notFound, useParams } from "next/navigation";
 import { useMemo } from "react";
 
@@ -57,6 +59,7 @@ import { useTRPC } from "../../../../../lib/trpc/client";
 
 export function Client() {
   const prefix = usePathnamePrefix();
+  const locale = useLocale();
   const { domain } = useParams<{ domain: string }>();
   const { cardType, barType, showUptime, numberOfDays } = useStatusPage();
   const embed = useEmbed();
@@ -117,24 +120,48 @@ export function Client() {
     ),
   );
 
+  // The query omits `locale` to keep the queryKey matching the server prefetch,
+  // so the payload arrives resolved at the page default — resolve to the
+  // visitor's locale here, off the raw i18n maps the payload still carries.
+  // REMINDER: if we are using the custom configuration, we need to use the pageWithCustomConfiguration
+  const page = useMemo(() => {
+    const source = pageWithCustomConfiguration ?? pageInitial;
+    if (!source) return undefined;
+    return {
+      ...source,
+      statusReports: source.statusReports.map((report) => ({
+        ...report,
+        title: resolveLocalized(report.titleI18n, report.title, locale),
+        statusReportUpdates: report.statusReportUpdates.map((update) => ({
+          ...update,
+          message: resolveLocalized(update.messageI18n, update.message, locale),
+        })),
+      })),
+    };
+  }, [pageWithCustomConfiguration, pageInitial, locale]);
+
   // NOTE: we need to filter out the incidents as we don't want to show all of them in the banner - a single one is enough
   // REMINDER: we could move that to the server - but we might wanna have the info of all openEvents actually
   const events = useMemo(() => {
     let hasIncident = false;
-    return (
+    const openEvents =
       pageInitial?.openEvents.filter((e) => {
         if (e.type !== "incident") return true;
         if (hasIncident) return false;
         hasIncident = true;
         return true;
-      }) ?? []
-    );
-  }, [pageInitial]);
+      }) ?? [];
 
-  if (!pageInitial) return null;
+    // getEvents named report events at the page default locale; point the tab
+    // labels at the resolved title so they match the body below them.
+    return openEvents.map((e) => {
+      if (e.type !== "report") return e;
+      const report = page?.statusReports.find((r) => r.id === e.id);
+      return report ? { ...e, name: report.title } : e;
+    });
+  }, [pageInitial, page]);
 
-  // REMINDER: if we are using the custom configuration, we need to use the pageWithCustomConfiguration
-  const page = pageWithCustomConfiguration ?? pageInitial;
+  if (!pageInitial || !page) return null;
 
   return (
     <div className="flex flex-col gap-6">
