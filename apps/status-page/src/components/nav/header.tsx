@@ -31,11 +31,11 @@ import { toast } from "sonner";
 import { usePathnamePrefix } from "../../hooks/use-pathname-prefix";
 import { useTRPC } from "../../lib/trpc/client";
 import { Link } from "../common/link";
-import { YavendioWordmark } from "./yavendio-wordmark";
 import {
   type StatusUpdateType,
   StatusUpdates,
 } from "../status-page/status-updates";
+import { YavendioWordmark } from "./yavendio-wordmark";
 
 type Page = RouterOutputs["statusPage"]["get"];
 
