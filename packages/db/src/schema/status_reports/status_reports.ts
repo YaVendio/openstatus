@@ -1,7 +1,7 @@
+import type { Locale } from "@openstatus/locales";
 import { relations, sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-import type { Locale } from "@openstatus/locales";
 import {
   statusReportUpdateToPageComponents,
   statusReportsToPageComponents,

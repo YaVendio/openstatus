@@ -1,7 +1,7 @@
+import { locales } from "@openstatus/locales";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import * as z from "zod";
 
-import { locales } from "@openstatus/locales";
 import {
   statusReport,
   statusReportStatus,
