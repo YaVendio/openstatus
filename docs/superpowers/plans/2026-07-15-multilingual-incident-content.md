@@ -22,7 +22,7 @@
 - **Secrets:** none added. Feed is public. MCP keeps existing `OPENSTATUS_API_KEY`.
 - **Fixture merchants 948181 / 948178 must never be touched** (not relevant here, but a standing rule).
 - **Test prerequisite (fork, services/api):** a local libSQL must be running and seeded. In one terminal: `turso dev`. Then: `pnpm --filter @openstatus/db migrate && pnpm --filter @openstatus/db seed`. Re-run `migrate` after Task A3 regenerates the schema.
-- **Per-surface gates:** openstatus TS → `pnpm format` (**oxfmt + oxlint**, NOT Biome — the repo's `Agent.md` is stale) + `tsc` + Drizzle migration discipline. web-app UI → `ya-frontend` + `ya-implementation` + `ya-review` + `ya-brand`. No Rust in scope.
+- **Per-surface gates:** openstatus TS → `pnpm format` (**oxfmt + oxlint**, NOT Biome — the repo's `Agent.md` is stale) + `tsc` + Drizzle migration discipline. web-app UI → `ya-frontend` + `ya-implementation` + `ya-review` + `ya-brand` + **`ya-posthog`** (analytics is a precondition of any user-facing feature, per web-app's CLAUDE.md). No Rust in scope.
 - **Ship order:** Part A merged, migrated, and LIVE before Part B ships.
 
 ---
@@ -847,9 +847,13 @@ git add -A && git commit -m "chore: oxfmt/oxlint format pass" || echo "nothing t
 
 ## Part B — web-app dashboard banner (NEW worktree, created at execution time)
 
-> Create via `superpowers:using-git-worktrees` on the `web-app` repo, branch `feat/eng-2288-status-banner`. Gates: `ya-frontend` + `ya-implementation` + `ya-review` + `ya-brand`. Ships only AFTER Part A is live.
+> Create via `superpowers:using-git-worktrees` on the `web-app` repo, branch `feat/eng-2288-status-banner`, **under `D:\YAVENDIO\WORKTREES\`** (rule 21). Base branch is **`develop`**, NOT `main` (prod promotes develop→main). Gates: `ya-frontend` + `ya-implementation` + `ya-review` + `ya-brand` + **`ya-posthog`**. Ships only AFTER Part A is live.
 >
-> **web-app is a standalone npm repo** (package name `yavendio`, `package-lock.json`, NOT a pnpm workspace). Run all commands from the web-app worktree dir with **npm**: `npm run test:run -- <pattern>`, `npm run lint` (`next lint`), `npm run type-check` (`tsc --noEmit`), `npm run format` (prettier). There is no `pnpm --filter web-app`.
+> **RE-ALIGNED 2026-07-16** against `web-app@develop` (`aa2863b2d`) after a 442-commit pull. The dashboard was reworked (sidebar-v3 + navbar + a banner stack) and the repo migrated package managers. Corrections below supersede the original assumptions.
+>
+> **web-app is a standalone `pnpm` repo** — package `yavendio`, **`pnpm-lock.yaml`**, `"packageManager": "pnpm@11.5.2"`. (It was npm when this plan was written; that is no longer true.) It is NOT part of a pnpm *workspace*, so there is still no `pnpm --filter web-app` — run commands **from the web-app worktree dir**: `pnpm test:run`, `pnpm lint` (`next lint`), `pnpm type-check` (`tsc --noEmit`), `pnpm format` (prettier).
+>
+> **CI runs no tests** — it only validates Prettier formatting (`make docker-run-ci`). Always `pnpm format` before committing. A bundle-budget gate (`scripts/bundle-budget.mjs`) fails CI on First Load JS regressions, so keep the banner light.
 
 ### Task B1: Feed summary derivation util
 
@@ -870,6 +874,8 @@ git add -A && git commit -m "chore: oxfmt/oxlint format pass" || echo "nothing t
 // vitest.config.mts — add to test.include
   "src/components/banners/status/**/*.test.{ts,tsx}",
 ```
+
+> **2026-07-16 — Step 0 is avoidable.** The allowlist ALREADY contains `src/lib/**/*.test.ts`. Putting the pure util at `src/lib/status-banner/derive-status-summary.ts` (+ its `.test.ts`) gets it discovered with **no config edit**, and matches the repo's own testing policy ("tests live from the Hooks layer down… utils/lib: pure functions"). Prefer that; only touch `vitest.config.mts` if the util must live under `src/components/banners/status/`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -949,7 +955,7 @@ describe("deriveStatusSummary", () => {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `npm run test:run -- derive-status-summary`
+Run: `pnpm test:run -- derive-status-summary`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement**
@@ -1012,7 +1018,7 @@ export function deriveStatusSummary(feed: StatusFeedJson): StatusSummary {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `npm run test:run -- derive-status-summary`
+Run: `pnpm test:run -- derive-status-summary`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -1035,20 +1041,34 @@ git commit -m "feat(banner): derive active-incident summary from status feed"
 - Consumes: `StatusSummary` (B1), `useLanguage` hook (chrome copy).
 - Produces: `<StatusBanner summary={StatusSummary} />` — renders nothing when `summary` is null or when a matching dismissal exists in `localStorage` (`status-banner-dismissed:<reportId>:<latestUpdateId>:<severity>`); otherwise a severity-colored bar with the localized title, a `Ver estado` link to `https://status.yavendio.com`, and a dismiss button.
 
+> **2026-07-16 — copy the in-repo precedent: `src/features/yv-billing/components/trial-downgrade-banner.tsx`.** It is the same shape (dismissible informational banner in the same stack) and is the reference for every convention below. Read it before writing B2.
+>
+> - `'use client'`; named export via `function`.
+> - Copy through `const { t } = useLanguage()` (`@/lang/hooks/useLanguage.hook`) — the custom singleton, **not next-intl**.
+> - Dismissal marker mirrors `src/features/yv-billing/hooks/trial-seen-marker.ts`: `localStorage` key `` `${PREFIX}:${id}` ``, every access wrapped in `try {} catch {}` (best-effort; private mode must not throw). Read the marker in an effect and gate on state — never read `localStorage` during render (SSR/hydration).
+> - Buttons: `YaButton` from `@/components/ya-ui/ya-button`; icons from `lucide-react` (`Info`, `X`) with `aria-hidden="true"`; dismiss `<button>` carries an `aria-label` from `t(...)`.
+> - Tokens only (no raw hex): `bg-background`, `text-foreground`, `text-muted-foreground`, `border-[var(--ya-stone-200)]` / `dark:border-[var(--ya-stone-700)]`, `font-bricolage`, `rounded-2xl`. Severity colors must map to earthy-semantic tokens from `src/styles/globals.css` — `ya-brand` gate enforces this.
+> - **Analytics is mandatory** (repo CLAUDE.md): plan the PostHog events BEFORE implementing — read `.claude/skills/ya-posthog/SKILL.md`. Events are `Object: Action` Title-Case/past-tense, English-only, `snake_case` props, and must carry `event_version` + `feature_version`; never add manual `user_id`/`merchant_id`. Suggested: `Status Banner: Viewed` / `Status Banner: Dismissed` / `Status Banner: Clicked`, defined under `src/analytics/posthog/events/`.
+> - Per the repo testing policy, **do NOT assert markup/classes/copy** in `StatusBanner.test.tsx` — presentation is verified in the browser. Keep the component test to behavior only (dismiss hides it; a new `latestUpdateId` re-shows it), or drop it and let B1's util test carry the logic.
+
 - [ ] **Step 1: Add chrome keys** to `src/lang/locales/en.json`, `es.json`, `pt.json`:
 
-The web-app locale files are **flat, one language per file** (nested by key path, NOT by locale). Add the same key path to each file with that file's language:
+The web-app locale files are **one language per file, NESTED objects** addressed by dot-notation (`t('banners.platform_status.cta')`). Add the same key path to each file with that file's language.
+
+> **2026-07-16 — use the existing `banners` namespace, NOT a new `statusBanner` top-level key.** All three locales already have a `banners` object holding every dashboard banner's copy (`billing_freeze`, `plan_upsell`, `version_update`, `brazil_erp_launch`, …). Put ours beside them as `banners.platform_status`.
+>
+> **Do NOT use a `status.*` key path — it is already taken** (`status.redirecting`, `status.notification_on/off`) and unrelated.
 
 ```jsonc
-// src/lang/locales/en.json
-  "statusBanner": { "prefix": "We're experiencing issues:", "cta": "View status", "dismiss": "Dismiss" }
+// src/lang/locales/en.json  → inside the existing "banners" object
+  "platform_status": { "prefix": "We're experiencing issues:", "cta": "View status", "dismiss": "Dismiss" }
 // src/lang/locales/es.json
-  "statusBanner": { "prefix": "Estamos presentando problemas:", "cta": "Ver estado", "dismiss": "Descartar" }
+  "platform_status": { "prefix": "Estamos presentando problemas:", "cta": "Ver estado", "dismiss": "Descartar" }
 // src/lang/locales/pt.json
-  "statusBanner": { "prefix": "Estamos com problemas:", "cta": "Ver status", "dismiss": "Dispensar" }
+  "platform_status": { "prefix": "Estamos com problemas:", "cta": "Ver status", "dismiss": "Dispensar" }
 ```
 
-Read an existing key (e.g. `common`) in each file first to match the exact nesting/placement.
+Read the existing `banners.billing_freeze` entry in each file first to match the exact nesting/placement and copy tone.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -1085,14 +1105,14 @@ describe("StatusBanner", () => {
 
 - [ ] **Step 3: Run to verify it fails**
 
-Run: `npm run test:run -- StatusBanner`
+Run: `pnpm test:run -- StatusBanner`
 Expected: FAIL — component not found.
 
 - [ ] **Step 4: Implement** `StatusBanner.tsx` — `"use client"`, read `useLanguage()` for copy, compute `dismissKey = status-banner-dismissed:${reportId}:${latestUpdateId}:${severity}`, gate on `localStorage`, render prefix + title + external link + dismiss button that writes the key and hides. **Severity → color must use REAL web-app tokens** (`bg-warning`/`bg-orange-500` do NOT exist here): use `bg-destructive/15 text-destructive` for `major`/`partial`, and a neutral `bg-muted text-foreground` for `degraded`/`info`. Confirm/refine the exact warning token with `magic:ya-brand` in Task B4 — never invent tokens or use raw palette classes.
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `npm run test:run -- StatusBanner`
+Run: `pnpm test:run -- StatusBanner`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
@@ -1139,7 +1159,7 @@ describe("fetchStatusSummary", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails** → `npm run test:run -- status-feed-fetch` (FAIL).
+- [ ] **Step 2: Run to verify it fails** → `pnpm test:run -- status-feed-fetch` (FAIL).
 
 - [ ] **Step 3: Implement** `status-feed-fetch.ts`:
 
@@ -1171,7 +1191,23 @@ Then `StatusBannerServer.tsx` (server component): resolve locale via `request-lo
 
 - [ ] **Step 4: Mount** in `src/app/dashboard-v2/layout.tsx` — render `<StatusBannerServer />` at the top of the layout body (above the existing content), wrapped in `<Suspense fallback={null}>` so the fetch never delays first paint.
 
-- [ ] **Step 5: Run to verify it passes** → `npm run test:run -- status-feed-fetch` (PASS).
+> **2026-07-16 — the layout was reworked; mount into the EXISTING banner stack.** `dashboard-v2/layout.tsx` now renders `AppSidebarV3` + `AppNavbar` inside a `SidebarProvider`/`SidebarInset`, and already has a banner stack. Current shape:
+>
+> ```tsx
+> <AppNavbar />
+> <BillingFreezeBanner />
+> <div className="px-3 md:px-6">
+>   <TrialKeepProBanner />
+>   <TrialDowngradeBanner />
+> </div>
+> <DashboardContentWrapper>{children}</DashboardContentWrapper>
+> ```
+>
+> Put `<Suspense fallback={null}><StatusBannerServer /></Suspense>` **inside the `px-3 md:px-6` div, above `<TrialKeepProBanner />`** — platform-status outranks billing nudges, and that div already owns the stack's horizontal gutter (so the banner must NOT add its own page padding). Do not mount above `AppNavbar` or outside `SidebarInset`: the layout is `h-svh overflow-hidden`, and a sibling outside the inset would fall outside the scroll container.
+>
+> The layout is `async` + `force-dynamic` and already awaits `getCurrentSession()`; the Suspense boundary keeps our fetch off the critical path regardless.
+
+- [ ] **Step 5: Run to verify it passes** → `pnpm test:run -- status-feed-fetch` (PASS).
 
 - [ ] **Step 6: Commit**
 
@@ -1185,10 +1221,17 @@ git commit -m "feat(banner): fail-open server fetch + mount in dashboard-v2 layo
 ### Task B4: web-app gates
 
 - [ ] **Step 1:** `magic:ya-brand` — confirm severity classes use design tokens (no raw hex/anti-slop). Fix inline.
-- [ ] **Step 2:** `ya-frontend` + `ya-implementation` — RSC boundary (server fetch, client banner), no useEffect-fetch, `npm run format`.
+- [ ] **Step 2:** `ya-frontend` + `ya-implementation` — RSC boundary (server fetch, client banner), no useEffect-fetch, `pnpm format`.
 - [ ] **Step 3:** `ya-review` after implementing — re-render/perf pass on the new components.
-- [ ] **Step 4:** `npm run lint && npm run type-check && npm run test:run` — green.
+- [ ] **Step 4:** `pnpm lint && pnpm type-check && pnpm test:run` — green.
 - [ ] **Step 5:** Commit any fixes.
+
+> **2026-07-16 additions:**
+> - **Step 0 (BEFORE writing B2): `ya-posthog`.** The repo's CLAUDE.md makes analytics a precondition, not a follow-up: "Before implementing any user-facing feature or interaction, read `.claude/skills/ya-posthog/SKILL.md` and plan which PostHog events are needed." The banner is user-facing.
+> - **`pnpm format` is the ONLY thing CI checks** (Prettier via `make docker-run-ci`) — an unformatted commit is the one guaranteed red. Tests do NOT run in CI, so B1–B3's tests must be run locally.
+> - **Bundle budget:** `scripts/bundle-budget.mjs` vs `bundle-budget.json` fails CI on First Load JS regressions. The banner mounts in the dashboard layout (loaded on every dashboard route), so it lands in a hot bundle — keep it dependency-free. Raising a budget requires written justification in the PR.
+> - **Prettier config matters:** 100 col, single quotes, **no semicolons**, `es5` trailing commas, import order react/next → third-party → `@/` → relative (blank-line separated). Just run `pnpm format`.
+> - **PR base is `develop`** (not `main`). Preview deploys land on Render (`web-app-staging-pr-<n>.onrender.com`); prod is Vercel from `main` behind `prod-promote-gate.yml`.
 
 ---
 
