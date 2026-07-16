@@ -9,6 +9,7 @@ import {
 } from "@openstatus/db/src/schema";
 import type { Scope, Workspace } from "@openstatus/db/src/schema";
 import type { ServiceContext } from "@openstatus/services";
+import { createStatusReportTool } from "@openstatus/services/agent-tools";
 import {
   SEEDED_WORKSPACE_FREE_ID,
   SEEDED_WORKSPACE_TEAM_ID,
@@ -238,6 +239,20 @@ describe("list_status_reports", () => {
 });
 
 describe("create_status_report", () => {
+  test("create_status_report input schema accepts titleI18n/messageI18n", () => {
+    const parsed = createStatusReportTool.inputSchema.parse({
+      title: "t",
+      titleI18n: { en: "t-en" },
+      status: "investigating",
+      message: "m",
+      messageI18n: { en: "m-en", pt: "m-pt" },
+      pageId: 1,
+      notify: false,
+    });
+    expect(parsed.titleI18n).toEqual({ en: "t-en" });
+    expect(parsed.messageI18n).toEqual({ en: "m-en", pt: "m-pt" });
+  });
+
   test("creates a report + initial update and emits audit with transport=mcp", async () => {
     await withTestTransaction(async (tx) => {
       const ctx = makeMcpToolCtx(teamWorkspace, { db: tx });

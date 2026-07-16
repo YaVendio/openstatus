@@ -2,6 +2,7 @@ import {
   currentImpactsFromUpdates,
   statusReportStatusSchema,
 } from "@openstatus/db/src/schema";
+import { locales } from "@openstatus/locales";
 import { z } from "zod";
 
 import type { ServiceContext } from "../context";
@@ -60,6 +61,19 @@ const componentImpactsInputShape = componentImpactsSchema
   .optional()
   .describe(
     "Per-component impact (operational | degraded_performance | partial_outage | major_outage). Component ids MUST come from list_page_components. Omit entirely for a report without impact tracking.",
+  );
+
+const messageI18nInputShape = z
+  .partialRecord(z.enum(locales), z.string())
+  .optional()
+  .describe(
+    "Per-locale translations of `message`, keyed by locale (e.g. { en, pt }). Optional — omit for a single-language update; the base `message` renders as the fallback for any locale not provided.",
+  );
+const titleI18nInputShape = z
+  .partialRecord(z.enum(locales), z.string())
+  .optional()
+  .describe(
+    "Per-locale translations of `title`, keyed by locale. Optional — base `title` is the fallback.",
   );
 
 const PER_PAGE_DEFAULT = 50;
@@ -183,11 +197,13 @@ export const listStatusReportsTool: AgentTool<
 
 const CreateStatusReportInputShape = z.object({
   title: z.string().min(1).max(256).describe("Short, public-facing title."),
+  titleI18n: titleI18nInputShape,
   status: statusReportStatusSchema.describe("Initial status for the report."),
   message: z
     .string()
     .min(1)
     .describe("Initial public update message customers will see."),
+  messageI18n: messageI18nInputShape,
   pageId: z
     .number()
     .int()
@@ -275,6 +291,14 @@ export const createStatusReportTool: AgentTool<
             ]
           : []),
         { label: "Message", value: input.message },
+        ...(input.messageI18n && Object.keys(input.messageI18n).length
+          ? [
+              {
+                label: "Translations",
+                value: Object.keys(input.messageI18n).join(", "),
+              },
+            ]
+          : []),
       ],
     }),
     verb: "created",
@@ -284,8 +308,10 @@ export const createStatusReportTool: AgentTool<
       ctx,
       input: {
         title: input.title,
+        titleI18n: input.titleI18n,
         status: input.status,
         message: input.message,
+        messageI18n: input.messageI18n,
         pageId: input.pageId,
         pageComponentIds: input.pageComponentIds ?? [],
         componentImpacts: input.componentImpacts,
@@ -333,6 +359,7 @@ const AddStatusReportUpdateInputShape = z.object({
     .string()
     .min(1)
     .describe("Public update message customers will see."),
+  messageI18n: messageI18nInputShape,
   componentImpacts: componentImpactsInputShape,
   date: z.iso
     .datetime()
@@ -399,6 +426,14 @@ export const addStatusReportUpdateTool: AgentTool<
             ]
           : []),
         { label: "Message", value: input.message },
+        ...(input.messageI18n && Object.keys(input.messageI18n).length
+          ? [
+              {
+                label: "Translations",
+                value: Object.keys(input.messageI18n).join(", "),
+              },
+            ]
+          : []),
       ],
     }),
     verb: "added",
@@ -410,6 +445,7 @@ export const addStatusReportUpdateTool: AgentTool<
         statusReportId: input.statusReportId,
         status: input.status,
         message: input.message,
+        messageI18n: input.messageI18n,
         componentImpacts: await withCarriedImpacts(
           ctx,
           input.statusReportId,
@@ -453,6 +489,7 @@ const UpdateStatusReportInputShape = z.object({
     .int()
     .describe("Report to edit. Resolve via list_status_reports."),
   title: z.string().min(1).max(256).optional().describe("New title."),
+  titleI18n: titleI18nInputShape,
   status: statusReportStatusSchema
     .refine((s) => s !== "resolved", {
       error:
@@ -493,6 +530,11 @@ export const updateStatusReportTool: AgentTool<
         { label: "Report ID", value: String(input.statusReportId) },
       ];
       if (input.title) lines.push({ label: "New Title", value: input.title });
+      if (input.titleI18n && Object.keys(input.titleI18n).length)
+        lines.push({
+          label: "Translations",
+          value: Object.keys(input.titleI18n).join(", "),
+        });
       if (input.status)
         lines.push({ label: "New Status", value: input.status });
       // Distinguish "don't touch components" (undefined) from
@@ -527,6 +569,7 @@ export const updateStatusReportTool: AgentTool<
       input: {
         id: input.statusReportId,
         title: input.title,
+        titleI18n: input.titleI18n,
         status: input.status,
         pageComponentIds: input.pageComponentIds,
       },
@@ -546,6 +589,7 @@ const ResolveStatusReportInputShape = z.object({
     .describe(
       "Resolution message customers will see explaining what was fixed.",
     ),
+  messageI18n: messageI18nInputShape,
   date: z.iso
     .datetime()
     .optional()
@@ -586,6 +630,14 @@ export const resolveStatusReportTool: AgentTool<
       lines: [
         { label: "Report ID", value: String(input.statusReportId) },
         { label: "Message", value: input.message },
+        ...(input.messageI18n && Object.keys(input.messageI18n).length
+          ? [
+              {
+                label: "Translations",
+                value: Object.keys(input.messageI18n).join(", "),
+              },
+            ]
+          : []),
       ],
     }),
     verb: "resolved",
@@ -596,6 +648,7 @@ export const resolveStatusReportTool: AgentTool<
       input: {
         statusReportId: input.statusReportId,
         message: input.message,
+        messageI18n: input.messageI18n,
         date: input.date ? new Date(input.date) : undefined,
       },
     });
