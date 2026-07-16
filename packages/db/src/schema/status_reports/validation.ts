@@ -1,6 +1,7 @@
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import * as z from "zod";
 
+import { locales } from "@openstatus/locales";
 import {
   statusReport,
   statusReportStatus,
@@ -9,10 +10,13 @@ import {
 
 export const statusReportStatusSchema = z.enum(statusReportStatus);
 
+const localizedText = z.partialRecord(z.enum(locales), z.string()).nullish();
+
 export const insertStatusReportUpdateSchema = createInsertSchema(
   statusReportUpdate,
   {
     status: statusReportStatusSchema,
+    messageI18n: localizedText,
   },
 ).extend({
   date: z.coerce.date().optional().prefault(new Date()),
@@ -20,6 +24,7 @@ export const insertStatusReportUpdateSchema = createInsertSchema(
 
 export const insertStatusReportSchema = createInsertSchema(statusReport, {
   status: statusReportStatusSchema,
+  titleI18n: localizedText,
 })
   .extend({
     date: z.coerce.date().optional().prefault(new Date()),
@@ -33,16 +38,19 @@ export const insertStatusReportSchema = createInsertSchema(statusReport, {
      * message for the `InsertIncidentUpdate`
      */
     message: z.string(),
+    messageI18n: localizedText,
   });
 
 export const selectStatusReportSchema = createSelectSchema(statusReport, {
   status: statusReportStatusSchema,
+  titleI18n: localizedText,
 });
 
 export const selectStatusReportUpdateSchema = createSelectSchema(
   statusReportUpdate,
   {
     status: statusReportStatusSchema,
+    messageI18n: localizedText,
   },
 );
 

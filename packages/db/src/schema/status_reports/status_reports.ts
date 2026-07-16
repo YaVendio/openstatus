@@ -1,6 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
+import type { Locale } from "@openstatus/locales";
 import {
   statusReportUpdateToPageComponents,
   statusReportsToPageComponents,
@@ -21,6 +22,9 @@ export const statusReport = sqliteTable(
     id: integer("id").primaryKey(),
     status: text("status", { enum: statusReportStatus }).notNull(),
     title: text("title", { length: 256 }).notNull(),
+    titleI18n: text("title_i18n", { mode: "json" }).$type<
+      Partial<Record<Locale, string>>
+    >(),
 
     workspaceId: integer("workspace_id").references(() => workspace.id),
 
@@ -49,6 +53,9 @@ export const statusReportUpdate = sqliteTable(
     status: text("status", { enum: statusReportStatus }).notNull(),
     date: integer("date", { mode: "timestamp" }).notNull(),
     message: text("message").notNull(),
+    messageI18n: text("message_i18n", { mode: "json" }).$type<
+      Partial<Record<Locale, string>>
+    >(),
 
     statusReportId: integer("status_report_id")
       .references(() => statusReport.id, { onDelete: "cascade" })
