@@ -3,9 +3,9 @@ import { DRACULA_THEME } from "./dracula";
 import { GITHUB_HIGH_CONTRAST_THEME } from "./github";
 import { OPENSTATUS_ROUNDED_THEME, OPENSTATUS_THEME } from "./openstatus";
 import { SUPABASE_THEME } from "./supabase";
-import { YAVENDIO_THEME } from "./yavendio";
 import type { Theme, ThemeDefinition, ThemeMap } from "./types";
 import { assertUniqueThemeIds } from "./utils";
+import { YAVENDIO_THEME } from "./yavendio";
 // Please keep the themes ordered :)
 const THEMES_LIST = [
   YAVENDIO_THEME,
