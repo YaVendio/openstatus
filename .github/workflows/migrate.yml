@@ -10,9 +10,6 @@ jobs:
   migrate:
     name: 🗃️ Migrate DB
     runs-on: ubuntu-latest
-    env:
-      DATABASE_URL:  ${{ secrets.DATABASE_URL }}
-      DATABASE_AUTH_TOKEN:  ${{ secrets.DATABASE_AUTH_TOKEN }}
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v6
@@ -33,6 +30,36 @@ jobs:
 
       - name: 📥 Download deps
         run: pnpm install
+
+      # libsql has no auth and both its ports are private, so it is reachable
+      # only from inside the cluster. Tunnelling keeps it that way — exposing it
+      # publicly would leave an unauthenticated database on the internet.
+      - name: 🔌 Tunnel to libsql
+        env:
+          NF_API_TOKEN: ${{ secrets.NF_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx @northflank/cli@0.11 forward service \
+            --projectId openstatus --serviceId libsql --skipHostnames \
+            > forward.log 2>&1 &
+
+          for _ in $(seq 1 60); do
+            grep -q "is exposed on" forward.log && break
+            sleep 2
+          done
+          if ! grep -q "is exposed on" forward.log; then
+            echo "::error::port-forward never came up"
+            cat forward.log
+            exit 1
+          fi
+
+          IP=$(grep -oE "127\.24\.[0-9]+\.[0-9]+" forward.log | head -1)
+          for _ in $(seq 1 30); do
+            curl -sf -o /dev/null "http://$IP:8080/health" && break
+            sleep 2
+          done
+          curl -sf -o /dev/null "http://$IP:8080/health"
+          echo "DATABASE_URL=http://$IP:8080" >> "$GITHUB_ENV"
 
       - name: 🗃️ Run migrations
         run: pnpm migrate
