@@ -23,6 +23,12 @@ overrides:
   next: "catalog:"
   # No catalog entry: nothing in the repo depends on protobufjs directly.
   protobufjs: 7.6.5
+  # Scoped by major: the 1.x and 2.x lines are outside the advisory ranges, and
+  # forcing them to 5.x would break minimatch. GHSA-rgw5-rvv9-x895 (ReDoS).
+  "brace-expansion@>=5.0.0 <5.0.9": 5.0.9
+  # GHSA-c2c7-rcm5-vvqj / GHSA-3v7f-55p6-f55p (ReDoS), both live majors affected.
+  "picomatch@<2.3.2": 2.3.2
+  "picomatch@>=4.0.0 <4.0.4": 4.0.5
 catalog:
   "@ai-sdk/anthropic": 1.2.12
   "@ai-sdk/openai-compatible": 2.0.54
