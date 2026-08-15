@@ -19,8 +19,9 @@ autoInstallPeers: true
 # Deduped to the patched version: tooling deps (MCP SDK, @react-email/ui,
 # @logtape/otel) otherwise keep a second, vulnerable copy resolved.
 overrides:
-  hono: 4.12.34
-  next: 16.2.11
+  hono: "catalog:"
+  next: "catalog:"
+  # No catalog entry: nothing in the repo depends on protobufjs directly.
   protobufjs: 7.6.5
 catalog:
   "@ai-sdk/anthropic": 1.2.12
