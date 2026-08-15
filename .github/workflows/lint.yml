@@ -1,5 +1,5 @@
 # https://github.com/kentcdodds/kentcdodds.com/blob/main/.github/workflows/deployment.yml
-name: autofix.ci # needed to securely identify the workflow
+name: Format
 on:
   pull_request:
 
@@ -12,8 +12,8 @@ permissions:
 
 
 jobs:
-  autofix:
-    name: autofix
+  format:
+    name: 🎨 Format
     runs-on: ubuntu-latest
     steps:
       - name: ⬇️ Checkout repo
@@ -31,9 +31,8 @@ jobs:
       - name: 📥 Download deps
         run: pnpm install
 
+      # autofix.ci pushed the fixes itself, but its GitHub App is not installed
+      # on this fork, so the action failed with a 500 and left the check red
+      # without applying anything. Report instead, and let the author fix.
       - name: 🔬 Lint
-        run: pnpm format
-      - name: Apply fixes
-        uses: autofix-ci/action@dd55f44df8f7cdb7a6bf74c78677eb8acd40cd0a
-        with:
-          commit-message: 'ci: apply automated fixes'
+        run: pnpm format:check
