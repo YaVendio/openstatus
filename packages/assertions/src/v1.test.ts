@@ -12,20 +12,40 @@ const PAYLOAD = {
     ],
   },
   status: "ok",
+  blank: "",
 };
 
 const BODY = JSON.stringify(PAYLOAD);
 
-// `contains`, not `eq`: JSONPath returns an array of matches, and evaluateString
-// compares it by identity, so `eq` cannot match a scalar target here.
-function assertContains(path: string, target: string) {
+const COMPARES = [
+  "contains",
+  "not_contains",
+  "eq",
+  "not_eq",
+  "empty",
+  "not_empty",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+] as const;
+
+function assertJson(
+  path: string,
+  compare: (typeof COMPARES)[number],
+  target: string,
+) {
   return new JsonBodyAssertion({
     version: "v1",
     type: "jsonBody",
     path,
-    compare: "contains",
+    compare,
     target,
   }).assert({ body: BODY, header: {}, status: 200 });
+}
+
+function assertContains(path: string, target: string) {
+  return assertJson(path, "contains", target);
 }
 
 describe("JsonBodyAssertion - path evaluation", () => {
@@ -48,6 +68,62 @@ describe("JsonBodyAssertion - path evaluation", () => {
     expect(
       assertContains("$.store.book[(@.length-1)].title", "Sword of Honour")
         .success,
+    ).toBe(true);
+  });
+});
+
+describe("JsonBodyAssertion - a path that matches nothing", () => {
+  // The regression this guards: JSONPath returns [], evaluateString compared that
+  // array against a string, and five of the ten comparators reported success.
+  test("fails for every comparator", () => {
+    for (const compare of COMPARES) {
+      expect(assertJson("$.doesNotExist", compare, "x").success).toBe(false);
+    }
+  });
+
+  test("blames the path, not the value", () => {
+    expect(assertJson("$.doesNotExist", "not_empty", "").message).toContain(
+      "matched nothing",
+    );
+  });
+});
+
+describe("JsonBodyAssertion - comparators over the matched values", () => {
+  test("eq matches a scalar", () => {
+    expect(assertJson("$.status", "eq", "ok").success).toBe(true);
+    expect(assertJson("$.status", "eq", "nope").success).toBe(false);
+  });
+
+  test("contains is a substring test, not element equality", () => {
+    expect(
+      assertJson("$.store.book[0].title", "contains", "Century").success,
+    ).toBe(true);
+  });
+
+  test("compares a non-string match by its JSON text", () => {
+    expect(assertJson("$.store.book[0].price", "eq", "8.95").success).toBe(
+      true,
+    );
+  });
+
+  test("empty and not_empty follow the matched value", () => {
+    expect(assertJson("$.blank", "empty", "").success).toBe(true);
+    expect(assertJson("$.blank", "not_empty", "").success).toBe(false);
+    expect(assertJson("$.status", "not_empty", "").success).toBe(true);
+  });
+
+  test("a presence assertion is satisfied by any match", () => {
+    expect(
+      assertJson("$.store.book[*].title", "eq", "Sword of Honour").success,
+    ).toBe(true);
+  });
+
+  test("an absence assertion must hold for every match", () => {
+    expect(
+      assertJson("$.store.book[*].title", "not_eq", "Sword of Honour").success,
+    ).toBe(false);
+    expect(
+      assertJson("$.store.book[*].title", "not_eq", "Missing Title").success,
     ).toBe(true);
   });
 });
