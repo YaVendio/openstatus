@@ -27,19 +27,11 @@ import type { PageUpdate } from "./types";
 let sendStatusReportUpdateMock: Stub<EmailClient>;
 let rejectNextSend: Error | null = null;
 
-// This suite owns its own page instead of leaning on seeded page 1.
-//
-// packages/services/src/page-subscriber/__tests__ also writes subscribers to
-// seeded page 1, each suite cleaning up only its own emails, and turbo runs the
-// two packages in parallel against the same libsql instance. A foreign
-// entire-page subscriber alive during a run therefore leaked into
-// dispatchPageUpdate's result and inflated every count in this file by one —
-// silently for the `toContain` assertions, and as a flaky failure for the
-// exact-count one. A dedicated page removes the race.
+// Own page, not seeded page 1: parallel suites share one libsql instance, so a
+// foreign subscriber on page 1 inflates the counts asserted below.
 const PAGE_SLUG = "dispatcher-test-page";
 const SEEDED_WORKSPACE_ID = 1;
 
-// Assigned in beforeAll, once the page and its components exist.
 let PAGE_ID: number;
 let COMPONENT_1: number;
 let COMPONENT_2: number;
@@ -73,8 +65,7 @@ async function cleanAll() {
   for (const email of Object.values(EMAILS)) {
     await db.delete(pageSubscriber).where(eq(pageSubscriber.email, email));
   }
-  // Cascades to page_component and page_subscriber. Also clears a page left
-  // behind by a crashed run, which would otherwise collide on the unique slug.
+  // A page left by a crashed run would collide on the unique slug.
   await db.delete(page).where(eq(page.slug, PAGE_SLUG));
 }
 
@@ -101,8 +92,7 @@ beforeAll(async () => {
       .values({
         workspaceId: SEEDED_WORKSPACE_ID,
         pageId: PAGE_ID,
-        // `static` is the only type that may leave monitorId null — see the
-        // page_component_type_check constraint.
+        // page_component_type_check: only `static` may leave monitorId null.
         type: "static",
         name,
       })
