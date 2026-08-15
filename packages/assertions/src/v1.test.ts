@@ -1,6 +1,6 @@
-import { JSONPath } from "jsonpath-plus";
 import { expect } from "@std/expect";
 import { describe, test } from "@std/testing/bdd";
+import { JSONPath } from "jsonpath-plus";
 
 import { JsonBodyAssertion } from "./v1";
 
