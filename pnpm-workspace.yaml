@@ -23,8 +23,11 @@ overrides:
   next: "catalog:"
   # No catalog entry: nothing in the repo depends on protobufjs directly.
   protobufjs: 7.6.5
-  # Scoped by major: the 1.x and 2.x lines are outside the advisory ranges, and
-  # forcing them to 5.x would break minimatch. GHSA-rgw5-rvv9-x895 (ReDoS).
+  # GHSA-rgw5-rvv9-x895 / GHSA-3jxr-9vmj-r5cp (ReDoS), all three live majors
+  # affected. Scoped by major because each has its own patched version, not
+  # because the older lines are safe; a blanket 5.x would break minimatch.
+  "brace-expansion@<1.1.16": 1.1.16
+  "brace-expansion@>=2.0.0 <2.1.2": 2.1.2
   "brace-expansion@>=5.0.0 <5.0.9": 5.0.9
   # GHSA-c2c7-rcm5-vvqj / GHSA-3v7f-55p6-f55p (ReDoS), both live majors affected.
   "picomatch@<2.3.2": 2.3.2
