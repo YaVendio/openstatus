@@ -101,7 +101,9 @@ describe("JsonBodyAssertion - comparators over the matched values", () => {
   });
 
   test("compares a non-string match by its JSON text", () => {
-    expect(assertJson("$.store.book[0].price", "eq", "8.95").success).toBe(true);
+    expect(assertJson("$.store.book[0].price", "eq", "8.95").success).toBe(
+      true,
+    );
   });
 
   test("empty and not_empty follow the matched value", () => {
