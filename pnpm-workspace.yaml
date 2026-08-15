@@ -16,6 +16,13 @@ allowBuilds:
   protobufjs: true
   sharp: true
 autoInstallPeers: true
+# Deduped to the patched version: tooling deps (MCP SDK, @react-email/ui,
+# @logtape/otel) otherwise keep a second, vulnerable copy resolved.
+overrides:
+  hono: "catalog:"
+  next: "catalog:"
+  # No catalog entry: nothing in the repo depends on protobufjs directly.
+  protobufjs: 7.6.5
 catalog:
   "@ai-sdk/anthropic": 1.2.12
   "@ai-sdk/openai-compatible": 2.0.54
@@ -140,7 +147,7 @@ catalog:
   feed: 4.2.2
   glob: 11.0.0
   gray-matter: 4.0.3
-  hono: 4.12.21
+  hono: 4.12.34
   hono-rate-limiter: 0.4.2
   ip-cidr: 4.0.2
   isomorphic-dompurify: 3.14.0
@@ -151,7 +158,7 @@ catalog:
   luxon: 3.7.2
   nanoid: 5.1.11
   nanoid-dictionary: 5.0.0
-  next: 16.2.6
+  next: 16.2.11
   next-auth: 5.0.0-beta.32
   next-intl: 4.12.0
   next-mdx-remote: 6.0.0
