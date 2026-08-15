@@ -211,6 +211,53 @@ function evaluateRecord(
   return { success: true };
 }
 
+// A JSONPath query yields every match, so an absence assertion has to hold for
+// all of them while a presence assertion is satisfied by any -- the same dual
+// evaluateRecord applies to DNS records.
+const absenceCompare: ReadonlySet<z.infer<typeof stringCompare>> = new Set([
+  "not_contains",
+  "not_eq",
+]);
+
+function asText(value: unknown): string {
+  if (typeof value === "string") return value;
+  const json = JSON.stringify(value);
+  return json === undefined ? String(value) : json;
+}
+
+function evaluateJson(
+  values: unknown[],
+  compare: z.infer<typeof stringCompare>,
+  target: string,
+  path: string,
+): AssertionResult {
+  // Zero matches satisfies nothing: it means the path is wrong, and reporting it
+  // as a passing comparison is what made not_empty succeed on a missing field.
+  if (values.length === 0) {
+    return {
+      success: false,
+      message: `Expected ${path} to match a value, but it matched nothing`,
+    };
+  }
+
+  const results = values.map((value) =>
+    evaluateString(asText(value), compare, target),
+  );
+  const success = absenceCompare.has(compare)
+    ? results.every((r) => r.success)
+    : results.some((r) => r.success);
+
+  if (success) {
+    return { success: true };
+  }
+  return {
+    success: false,
+    message:
+      results.find((r) => !r.success)?.message ??
+      `Expected ${path} to satisfy ${compare}`,
+  };
+}
+
 export const base = z.looseObject({
   version: z.enum(["v1"]).prefault("v1"),
   type: z.string(),
@@ -361,11 +408,19 @@ export class JsonBodyAssertion implements Assertion {
     }
     try {
       const json = JSON.parse(req.body);
-      const value = JSONPath({ path: this.schema.path, json });
-      const { success, message } = evaluateString(
-        value,
+      const matches = JSONPath({ path: this.schema.path, json });
+      // JSONPath is typed `any`; normalise so a non-wrapped result cannot slip
+      // through as a scalar again.
+      const values: unknown[] = Array.isArray(matches)
+        ? matches
+        : matches === undefined
+          ? []
+          : [matches];
+      const { success, message } = evaluateJson(
+        values,
         this.schema.compare,
         this.schema.target,
+        this.schema.path,
       );
       if (success) {
         return { success };
