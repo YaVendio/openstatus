@@ -41,8 +41,8 @@ jobs:
         run: |
           set -euo pipefail
           # the CLI ignores NF_API_TOKEN and fails with "No CLI context present" without a login
-          npx @northflank/cli@0.11 login --token-login -t "$NF_API_TOKEN" -n ci > /dev/null
-          npx @northflank/cli@0.11 forward service \
+          npx @northflank/cli@0.11.7 login --token-login -t "$NF_API_TOKEN" -n ci > /dev/null
+          npx @northflank/cli@0.11.7 forward service \
             --projectId openstatus --serviceId libsql --skipHostnames \
             > forward.log 2>&1 &
 
