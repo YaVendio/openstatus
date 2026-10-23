@@ -36,11 +36,12 @@ jobs:
       # publicly would leave an unauthenticated database on the internet.
       - name: 🔌 Tunnel to libsql
         env:
-          # the CLI only reads NF_API_TOKEN; the secret is named per-project so a
-          # leak here cannot reach the rest of the Northflank team.
+          # project-scoped so a leak here cannot reach the rest of the Northflank team
           NF_API_TOKEN: ${{ secrets.NORTHFLANK_OPENSTATUS_API_KEY }}
         run: |
           set -euo pipefail
+          # the CLI ignores NF_API_TOKEN and fails with "No CLI context present" without a login
+          npx @northflank/cli@0.11 login --token-login -t "$NF_API_TOKEN" -n ci > /dev/null
           npx @northflank/cli@0.11 forward service \
             --projectId openstatus --serviceId libsql --skipHostnames \
             > forward.log 2>&1 &
